@@ -1,0 +1,5 @@
+{
+  "name": "QA Insight Dashboard",
+  "description": "A comprehensive QA dashboard for tracking bugs across Android and iOS platforms, integrated with OpenProject. Features management and lead-level views with priority and module-based analytics.",
+  "requestFramePermissions": []
+}
