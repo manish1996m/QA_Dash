@@ -2,7 +2,7 @@ import { Bug } from "../types";
 import { DashboardData } from "./openProject";
 
 // Helper to get the API key
-function getApiKey() {
+function getApiK() {
   return localStorage.getItem('gemini_api_key') || process.env.GEMINI_API_KEY || "";
 }
 
