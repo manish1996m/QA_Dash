@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { ShieldCheck, ArrowRight, LayoutDashboard, Database, BarChart3, Zap } from 'lucide-react';
 
 export function LoginView() {
@@ -16,12 +15,7 @@ export function LoginView() {
       <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-im-blue/5 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-im-blue/10 rounded-full blur-[100px]" />
       
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-[1100px] grid lg:grid-cols-2 bg-white rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-black/[0.03] overflow-hidden relative z-10"
-      >
+      <div className="w-full max-w-[1100px] grid lg:grid-cols-2 bg-white rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-black/[0.03] overflow-hidden relative z-10">
         {/* Left Side: Branding and Visuals */}
         <div className="bg-im-blue p-12 lg:p-16 flex flex-col justify-between relative overflow-hidden text-white">
           <div className="absolute inset-0 bg-gradient-to-br from-im-blue via-im-blue to-im-blue-light" />
@@ -74,14 +68,10 @@ export function LoginView() {
           </p>
 
           {error === 'unauthorized' && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="w-full mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-semibold flex items-center gap-3"
-            >
+            <div className="w-full mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-semibold flex items-center gap-3">
               <span className="flex-shrink-0 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               Access restricted to @indiamart.com emails only.
-            </motion.div>
+            </div>
           )}
 
           <button 
@@ -98,7 +88,7 @@ export function LoginView() {
             internal Data Security and Privacy policies.
           </p>
         </div>
-      </motion.div>
+      </div>
       
       {/* Footer Branding */}
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-slate-400 text-[11px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">

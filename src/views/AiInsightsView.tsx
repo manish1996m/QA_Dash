@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { BrainCircuit, RefreshCw, Zap, ShieldAlert } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { cn } from '../utils/cn';
@@ -13,12 +12,7 @@ interface AiInsightsViewProps {
 
 export function AiInsightsView({ insights, loading, onRefresh }: AiInsightsViewProps) {
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="flex flex-col gap-8"
-    >
+    <div className="flex flex-col gap-8">
       <GlowWrapper className="flex items-center justify-between bg-white p-5 rounded-xl border border-black/[0.08] shadow-soft">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-im-teal/10 rounded-xl border border-im-teal/20 text-im-teal">
@@ -126,6 +120,6 @@ export function AiInsightsView({ insights, loading, onRefresh }: AiInsightsViewP
           <p className="text-sm text-slate-300 font-medium">Click the button above to start AI-powered analysis of your QA data.</p>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

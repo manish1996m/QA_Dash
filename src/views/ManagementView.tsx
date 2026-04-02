@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { 
   Smartphone, 
   Apple, 
@@ -68,57 +67,95 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
   }).sort((a, b) => b.count - a.count);
 
   const getModuleLinks = (moduleName: string, platform: Platform) => {
-    const project = platform === 'Android' ? PROJECTS.ANDROID : PROJECTS.IOS;
+    const projectSlug = platform === 'Android' ? 'android' : 'iosnative';
+    const baseUrl = `https://project.intermesh.net/projects/${projectSlug}/work_packages`;
     const categoryIds = MODULE_CATEGORY_MAPPINGS[moduleName]?.[platform] || [];
     
-    const baseUrl = `https://project.intermesh.net/projects/${project}/work_packages`;
+    const androidExcludedStatuses = ["41", "56", "45", "67", "68", "53"];
+    const iosExcludedStatuses = ["56", "67", "68", "53", "71", "41", "45"];
     
-    const hpMpFilters = [
-      { field: 'status', operator: 'o', values: [] },
-      { field: 'priority', operator: '=', values: [PRIORITIES.HIGH, PRIORITIES.MEDIUM] }
-    ];
-
-    const lowFilters = [
-      { field: 'status', operator: 'o', values: [] },
-      { field: 'priority', operator: '=', values: [PRIORITIES.LOW] }
-    ];
-
-    if (categoryIds.length > 0) {
-      hpMpFilters.push({ field: 'category', operator: '=', values: categoryIds });
-      lowFilters.push({ field: 'category', operator: '=', values: categoryIds });
+    let c: string[];
+    let hi: boolean;
+    let g: string;
+    let t: string;
+    
+    if (platform === 'Android') {
+      c = ["id", "subject", "priority", "author", "category", "customField6", "type", "status"];
+      hi = false;
+      g = "category";
+      t = "category:desc,priority:asc,id:asc";
     } else {
-      hpMpFilters.push({ field: 'subject', operator: '~', values: [moduleName] });
-      lowFilters.push({ field: 'subject', operator: '~', values: [moduleName] });
+      c = ["id", "project", "subject", "type", "parent", "status", "priority", "author", "assignee", "responsible", "updatedAt", "category", "version", "createdAt", "customField1", "storyPoints", "remainingTime", "position"];
+      hi = true;
+      g = "";
+      t = "id:asc";
     }
 
+    const excludedStatuses = platform === 'Android' ? androidExcludedStatuses : iosExcludedStatuses;
+    
+    const getQueryProps = (priorities: string[]) => {
+      const filters: any[] = [
+        { n: "status", o: "!", v: excludedStatuses },
+        { n: "type", o: "=", v: ["7"] },
+        { n: "priority", o: "=", v: priorities }
+      ];
+
+      if (categoryIds.length > 0) {
+        filters.push({ n: "category", o: "=", v: categoryIds });
+      } else {
+        filters.push({ n: "subject", o: "~", v: [moduleName] });
+      }
+
+      return {
+        c, hi, g, is: true, tv: false, hl: "none", t,
+        f: filters,
+        pp: 100,
+        pa: 1
+      };
+    };
+
     return {
-      hp_mp: `${baseUrl}?filters=${encodeURIComponent(JSON.stringify(hpMpFilters))}`,
-      low: `${baseUrl}?filters=${encodeURIComponent(JSON.stringify(lowFilters))}`
+      hp_mp: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.HIGH, PRIORITIES.MEDIUM])))}`,
+      low: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.LOW])))}`
     };
   };
 
   const getGlobalLink = (platform: Platform, highOnly: boolean = false) => {
-    const project = platform === 'Android' ? PROJECTS.ANDROID : PROJECTS.IOS;
-    const baseUrl = `https://project.intermesh.net/projects/${project}/work_packages`;
+    const projectId = platform === 'Android' ? PROJECTS.ANDROID : PROJECTS.IOS;
+    const baseUrl = `https://project.intermesh.net/projects/${projectId}/work_packages`;
     
-    const filters = [
-      { field: 'status', operator: 'o', values: [] }
+    // Exact same filters as OpenProject UI
+    const androidExcludedStatuses = ["41", "56", "45", "67", "68", "53"];
+    const iosExcludedStatuses = ["56", "67", "68", "53", "71", "41", "45"];
+    const excludedStatuses = platform === 'Android' ? androidExcludedStatuses : iosExcludedStatuses;
+
+    const filters: any[] = [
+      { n: "status", o: "!", v: excludedStatuses },
+      { n: "type", o: "=", v: ["7"] }
     ];
 
     if (highOnly) {
-      filters.push({ field: 'priority', operator: '=', values: [PRIORITIES.HIGH] });
+      filters.push({ n: "priority", o: "=", v: [PRIORITIES.HIGH] });
     }
 
-    return `${baseUrl}?filters=${encodeURIComponent(JSON.stringify(filters))}`;
+    const queryProps = {
+      c: ["id", "subject", "priority", "author", "category", "type", "status"],
+      hi: false,
+      g: "category",
+      is: true,
+      tv: false,
+      hl: "none",
+      t: "category:desc,priority:asc,id:asc",
+      f: filters,
+      pp: 100,
+      pa: 1
+    };
+
+    return `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(queryProps))}`;
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="flex flex-col gap-8"
-    >
+    <div className="flex flex-col gap-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           label="Android Pending" 
@@ -283,14 +320,8 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                 </div>
               </div>
 
-              <AnimatePresence>
                 {expandedModule === m.name && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
+                  <div className="overflow-hidden">
                     <div className="p-3 flex flex-col gap-2 bg-slate-50/50 rounded-b-xl mx-2 border-x border-b border-black/[0.05]">
                       {['Android', 'iOS'].map(platform => {
                         const platformStats = dashboardData?.moduleStats[m.name]?.[platform as Platform];
@@ -317,14 +348,8 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                               </div>
                             </div>
 
-                            <AnimatePresence>
                               {isExpanded && (
-                                <motion.div 
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  className="border-t border-black/[0.05] p-5 bg-slate-50/30"
-                                >
+                                <div className="border-t border-black/[0.05] p-5 bg-slate-50/30">
                                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                     <div className="grid grid-cols-2 gap-3">
                                       <div className="p-4 bg-white rounded-xl border border-black/[0.08] shadow-sm flex flex-col gap-2">
@@ -397,20 +422,18 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                                       </div>
                                     </div>
                                   </div>
-                                </motion.div>
+                                </div>
                               )}
-                            </AnimatePresence>
                           </div>
                         );
                       })}
                     </div>
-                  </motion.div>
+                    </div>
                 )}
-              </AnimatePresence>
             </div>
           ))}
         </div>
       </GlowWrapper>
-    </motion.div>
+    </div>
   );
 }

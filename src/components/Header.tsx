@@ -7,9 +7,10 @@ interface HeaderProps {
   bugs: any[];
   loading?: boolean;
   onRefresh?: () => void;
+  syncing?: boolean;
 }
 
-export function Header({ view, bugs, loading = false, onRefresh }: HeaderProps) {
+export function Header({ view, bugs, loading = false, onRefresh, syncing = false }: HeaderProps) {
   const [isExportOpen, setIsExportOpen] = React.useState(false);
 
   const stats = {
@@ -56,13 +57,16 @@ export function Header({ view, bugs, loading = false, onRefresh }: HeaderProps) 
       </div>
 
       <div className="flex items-center gap-3">
-        <button
+        <button 
           onClick={onRefresh}
-          disabled={loading}
-          className="p-2 rounded-lg border border-slate-200 text-slate-400 hover:text-im-blue hover:border-im-blue transition-all disabled:opacity-50"
-          title="Refresh Data"
+          disabled={loading || syncing}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-im-blue hover:border-im-blue transition-all disabled:opacity-50"
+          title="Sync with OpenProject"
         >
-          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+          <RefreshCw className={cn("w-3.5 h-3.5", (loading || syncing) && "animate-spin")} />
+          <span className="text-[11px] font-bold uppercase tracking-wider">
+            {syncing ? "Syncing..." : "Sync Data"}
+          </span>
         </button>
 
         <div className="relative">

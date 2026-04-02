@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle, Save, Check } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -39,23 +38,15 @@ export function SettingsModal({ show, onClose, onSave }: SettingsModalProps) {
     }, 1000);
   };
 
+  if (!show) return null;
+
   return (
-    <AnimatePresence>
-      {show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
-          />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative w-full max-w-md bg-white rounded-xl p-6 shadow-2xl border border-black/[0.08]"
-          >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+      <div 
+        onClick={onClose}
+        className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
+      />
+      <div className="relative w-full max-w-md bg-white rounded-xl p-6 shadow-2xl border border-black/[0.08]">
             <div className="flex justify-between items-center mb-6">
               <div className="flex flex-col">
                 <h3 className="text-lg font-bold text-slate-800">Configurations</h3>
@@ -159,10 +150,8 @@ export function SettingsModal({ show, onClose, onSave }: SettingsModalProps) {
                 )}
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+      </div>
+    </div>
   );
 }
 

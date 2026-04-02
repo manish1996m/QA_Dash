@@ -15,7 +15,10 @@ export interface Bug {
   status: BugStatus;
   module: string;
   category: string;
+  description: string;
   assignedTo: string;
+  author: string;
+  authorId: string;
   createdAt: string;
   tatExceeded: boolean;
 }
