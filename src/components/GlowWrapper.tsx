@@ -4,6 +4,7 @@ import { cn } from '../utils/cn';
 interface GlowWrapperProps {
   children: React.ReactNode;
   className?: string;
+  contentClassName?: string;
   glowColor?: string;
   size?: number;
 }
@@ -17,6 +18,7 @@ interface GlowWrapperProps {
 export function GlowWrapper({ 
   children, 
   className, 
+  contentClassName,
   glowColor = "rgba(37, 99, 235, 0.38)",
   size = 69
 }: GlowWrapperProps) {
@@ -55,7 +57,7 @@ export function GlowWrapper({
       {/* The Glow Effect Layer */}
       <div 
         className={cn(
-          "pointer-events-none absolute -inset-px z-0 transition-opacity duration-500 ease-in-out",
+          "pointer-events-none absolute -inset-px z-50 transition-opacity duration-300 ease-out",
           isHovered ? "opacity-100" : "opacity-0"
         )}
         style={{
@@ -64,7 +66,7 @@ export function GlowWrapper({
       />
 
       {/* Content Layer */}
-      <div className="relative z-10">
+      <div className={cn("relative z-10 w-full", contentClassName)}>
         {children}
       </div>
     </div>

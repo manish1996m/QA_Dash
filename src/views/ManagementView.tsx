@@ -93,12 +93,16 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
 
     const excludedStatuses = platform === 'Android' ? androidExcludedStatuses : iosExcludedStatuses;
     
-    const getQueryProps = (priorities: string[]) => {
+    const getQueryProps = (priorities: string[], tatDays?: string) => {
       const filters: any[] = [
         { n: "status", o: "!", v: excludedStatuses },
         { n: "type", o: "=", v: ["7"] },
         { n: "priority", o: "=", v: priorities }
       ];
+
+      if (tatDays) {
+        filters.push({ n: "createdAt", o: "<t-", v: [tatDays] });
+      }
 
       if (categoryIds.length > 0) {
         filters.push({ n: "category", o: "=", v: categoryIds });
@@ -116,7 +120,10 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
 
     return {
       hp_mp: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.HIGH, PRIORITIES.MEDIUM])))}`,
-      low: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.LOW])))}`
+      low: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.LOW])))}`,
+      tatHigh: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.HIGH], "3")))}`,
+      tatMedium: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.MEDIUM], "7")))}`,
+      tatLow: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.LOW], "15")))}`
     };
   };
 
@@ -397,20 +404,41 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                                     <div className="bg-white p-4 rounded-xl border border-black/[0.08] shadow-sm">
                                       <div className="text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-3">TAT Exceeded Summary (Pending)</div>
                                       <div className="grid grid-cols-3 gap-3">
-                                        <div className="flex flex-col gap-1 p-2.5 bg-im-red/[0.03] rounded-lg border border-im-red/[0.08]">
-                                          <div className="text-[8px] uppercase font-bold text-im-red opacity-70">High (&gt;3d)</div>
+                                        <div className="flex flex-col gap-1 p-2.5 bg-im-red/[0.03] rounded-lg border border-im-red/[0.08] relative group">
+                                          <div className="text-[8px] uppercase font-bold text-im-red opacity-70 flex items-center justify-between">
+                                            <span>High (&gt;3d)</span>
+                                            {getModuleLinks(m.name, platform as Platform) && (
+                                              <a href={getModuleLinks(m.name, platform as Platform)?.tatHigh} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110">
+                                                <ExternalLink className="w-2.5 h-2.5" />
+                                              </a>
+                                            )}
+                                          </div>
                                           <div className="text-xl font-mono font-bold text-im-red">
                                             {calculateTATExceeded(platformBugs, 'High')}
                                           </div>
                                         </div>
-                                        <div className="flex flex-col gap-1 p-2.5 bg-amber-500/[0.03] rounded-lg border border-amber-500/[0.08]">
-                                          <div className="text-[8px] uppercase font-bold text-amber-600 opacity-70">Medium (&gt;7d)</div>
+                                        <div className="flex flex-col gap-1 p-2.5 bg-amber-500/[0.03] rounded-lg border border-amber-500/[0.08] relative group">
+                                          <div className="text-[8px] uppercase font-bold text-amber-600 opacity-70 flex items-center justify-between">
+                                            <span>Medium (&gt;7d)</span>
+                                            {getModuleLinks(m.name, platform as Platform) && (
+                                              <a href={getModuleLinks(m.name, platform as Platform)?.tatMedium} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110">
+                                                <ExternalLink className="w-2.5 h-2.5" />
+                                              </a>
+                                            )}
+                                          </div>
                                           <div className="text-xl font-mono font-bold text-amber-600">
                                             {calculateTATExceeded(platformBugs, 'Medium')}
                                           </div>
                                         </div>
-                                        <div className="flex flex-col gap-1 p-2.5 bg-im-teal/[0.03] rounded-lg border border-im-teal/[0.08]">
-                                          <div className="text-[8px] uppercase font-bold text-im-teal opacity-70">Low (&gt;15d)</div>
+                                        <div className="flex flex-col gap-1 p-2.5 bg-im-teal/[0.03] rounded-lg border border-im-teal/[0.08] relative group">
+                                          <div className="text-[8px] uppercase font-bold text-im-teal opacity-70 flex items-center justify-between">
+                                            <span>Low (&gt;15d)</span>
+                                            {getModuleLinks(m.name, platform as Platform) && (
+                                              <a href={getModuleLinks(m.name, platform as Platform)?.tatLow} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110">
+                                                <ExternalLink className="w-2.5 h-2.5" />
+                                              </a>
+                                            )}
+                                          </div>
                                           <div className="text-xl font-mono font-bold text-im-teal">
                                             {calculateTATExceeded(platformBugs, 'Low')}
                                           </div>

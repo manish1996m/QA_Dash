@@ -12,6 +12,7 @@ import { fetchBugs, syncBugs, DashboardData } from './services/openProject';
 import { getQAInsights } from './services/gemini';
 import { Bug } from './types';
 import { ChatBot } from './components/ChatBot';
+import { GlobalCursorGlow } from './components/GlobalCursorGlow';
 
 function App() {
   const [view, setView] = useState<'management' | 'leads' | 'ai'>('management');
@@ -133,6 +134,7 @@ function App() {
         onSave={() => loadData()}
       />
       <ChatBot bugs={bugs} data={dashboardData} />
+      <GlobalCursorGlow />
     </div>
   );
 }
