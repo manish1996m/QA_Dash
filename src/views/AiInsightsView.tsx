@@ -1,6 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { BrainCircuit, RefreshCw, Zap, ShieldAlert } from 'lucide-react';
+import { BrainCircuit, RefreshCw, Zap, ShieldAlert, Sparkles } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { cn } from '../utils/cn';
 import { GlowWrapper } from '../components/GlowWrapper';
@@ -13,30 +12,33 @@ interface AiInsightsViewProps {
 
 export function AiInsightsView({ insights, loading, onRefresh }: AiInsightsViewProps) {
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="flex flex-col gap-8"
-    >
-      <GlowWrapper className="flex items-center justify-between bg-white p-5 rounded-xl border border-black/[0.08] shadow-soft">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-im-teal/10 rounded-xl border border-im-teal/20 text-im-teal">
-            <BrainCircuit className="w-6 h-6" />
+    <div className="flex flex-col gap-8">
+      <GlowWrapper className="bg-white rounded-xl border border-black/[0.08] shadow-soft w-full overflow-hidden">
+        <div className="flex flex-row items-center justify-between p-8 w-full gap-8">
+          <div className="flex items-center gap-6 flex-1 min-w-0">
+            <div className="p-4 bg-gradient-to-br from-im-teal/20 to-im-blue/10 rounded-2xl border border-im-teal/30 shadow-inner flex-shrink-0">
+              <BrainCircuit className="w-8 h-8 text-im-teal" />
+            </div>
+            <div className="flex flex-col gap-2 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-800">AI Intelligence Hub</h3>
+                <span className="px-2 py-0.5 bg-slate-50 text-[9px] font-black uppercase text-slate-400 border border-slate-100 rounded-md tracking-widest whitespace-nowrap">
+                  Gemini 1.5 Pro
+                </span>
+              </div>
+              <p className="text-sm text-slate-400 font-medium tracking-tight">AI-powered deep analysis of your QA metrics</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">Gemini QA Intelligence</h3>
-            <p className="text-[11px] text-slate-400 font-medium">AI-powered analysis of your QA ecosystem</p>
-          </div>
+          <button 
+            onClick={onRefresh}
+            disabled={loading}
+            className="group relative flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-im-blue to-im-teal text-white rounded-2xl font-black uppercase tracking-widest text-[11px] hover:scale-105 transition-all duration-500 disabled:opacity-50 shadow-xl hover:shadow-im-blue/40 active:scale-95 overflow-hidden flex-shrink-0"
+          >
+            <div className="absolute inset-0 bg-white/15 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
+            <Sparkles className={cn("w-5 h-5", loading && "animate-spin-slow")} />
+            {loading ? "Analyzing..." : "Regenerate Hub"}
+          </button>
         </div>
-        <button 
-          onClick={onRefresh}
-          disabled={loading}
-          className="flex items-center gap-2 px-6 py-2.5 bg-im-blue text-white rounded-lg font-bold uppercase tracking-wider text-[10px] hover:bg-im-blue-light transition-all duration-200 disabled:opacity-50 shadow-sm active:scale-95"
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-          Regenerate
-        </button>
       </GlowWrapper>
 
       {loading ? (
@@ -126,6 +128,6 @@ export function AiInsightsView({ insights, loading, onRefresh }: AiInsightsViewP
           <p className="text-sm text-slate-300 font-medium">Click the button above to start AI-powered analysis of your QA data.</p>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

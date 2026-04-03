@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Filter, ChevronRight } from 'lucide-react';
+import { Filter, ChevronRight, ExternalLink } from 'lucide-react';
 import { Bug, Platform } from '../types';
 import { TEAMS } from '../constants';
 import { cn } from '../utils/cn';
@@ -10,21 +9,56 @@ interface LeadsViewProps {
   bugs: Bug[];
 }
 
+const MEMBER_URLS: Record<string, string> = {
+  "Shubham Panigrahi": "https://project.intermesh.net/projects/android/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22subject%22%2C%22priority%22%2C%22author%22%2C%22category%22%2C%22customField6%22%2C%22type%22%2C%22status%22%5D%2C%22hi%22%3Afalse%2C%22g%22%3A%22category%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22category%3Adesc%2Cpriority%3Aasc%2Cid%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2241%22%2C%2256%22%2C%2245%22%2C%2267%22%2C%2268%22%2C%2253%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223340%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D",
+  "Akhileswarao Chinnari": "https://project.intermesh.net/projects/android/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22subject%22%2C%22priority%22%2C%22author%22%2C%22category%22%2C%22customField6%22%2C%22type%22%2C%22status%22%5D%2C%22hi%22%3Afalse%2C%22g%22%3A%22category%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22category%3Adesc%2Cpriority%3Aasc%2Cid%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2241%22%2C%2256%22%2C%2245%22%2C%2267%22%2C%2268%22%2C%2253%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223631%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D",
+  "Abhradeep Kanrar": "https://project.intermesh.net/projects/android/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22subject%22%2C%22priority%22%2C%22author%22%2C%22category%22%2C%22customField6%22%2C%22type%22%2C%22status%22%5D%2C%22hi%22%3Afalse%2C%22g%22%3A%22category%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22category%3Adesc%2Cpriority%3Aasc%2Cid%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2241%22%2C%2256%22%2C%2245%22%2C%2267%22%2C%2268%22%2C%2253%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223977%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D",
+  "Priyanka Chittimelli": "https://project.intermesh.net/projects/android/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22subject%22%2C%22priority%22%2C%22author%22%2C%22category%22%2C%22customField6%22%2C%22type%22%2C%22status%22%5D%2C%22hi%22%3Afalse%2C%22g%22%3A%22category%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22category%3Adesc%2Cpriority%3Aasc%2Cid%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2241%22%2C%2256%22%2C%2245%22%2C%2267%22%2C%2268%22%2C%2253%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223630%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D",
+  "Aditya Rai": "https://project.intermesh.net/projects/iosnative/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22project%22%2C%22subject%22%2C%22type%22%2C%22parent%22%2C%22status%22%2C%22priority%22%2C%22author%22%2C%22assignee%22%2C%22responsible%22%2C%22updatedAt%22%2C%22category%22%2C%22version%22%2C%22createdAt%22%2C%22customField1%22%2C%22storyPoints%22%2C%22remainingTime%22%2C%22position%22%5D%2C%22hi%22%3Atrue%2C%22g%22%3A%22%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22id%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2256%22%2C%2267%22%2C%2268%22%2C%2253%22%2C%2271%22%2C%2241%22%2C%2245%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223045%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D",
+  "Anjali Patel": "https://project.intermesh.net/projects/iosnative/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22project%22%2C%22subject%22%2C%22type%22%2C%22parent%22%2C%22status%22%2C%22priority%22%2C%22author%22%2C%22assignee%22%2C%22responsible%22%2C%22updatedAt%22%2C%22category%22%2C%22version%22%2C%22createdAt%22%2C%22customField1%22%2C%22storyPoints%22%2C%22remainingTime%22%2C%22position%22%5D%2C%22hi%22%3Atrue%2C%22g%22%3A%22%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22id%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2256%22%2C%2267%22%2C%2268%22%2C%2253%22%2C%2271%22%2C%2241%22%2C%2245%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223091%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D",
+  "Freeda A Fernandes": "https://project.intermesh.net/projects/iosnative/work_packages?query_props=%7B%22c%22%3A%5B%22id%22%2C%22project%22%2C%22subject%22%2C%22type%22%2C%22parent%22%2C%22status%22%2C%22priority%22%2C%22author%22%2C%22assignee%22%2C%22responsible%22%2C%22updatedAt%22%2C%22category%22%2C%22version%22%2C%22createdAt%22%2C%22customField1%22%2C%22storyPoints%22%2C%22remainingTime%22%2C%22position%22%5D%2C%22hi%22%3Atrue%2C%22g%22%3A%22%22%2C%22is%22%3Atrue%2C%22tv%22%3Afalse%2C%22hl%22%3A%22none%22%2C%22t%22%3A%22id%3Aasc%22%2C%22f%22%3A%5B%7B%22n%22%3A%22status%22%2C%22o%22%3A%22!%22%2C%22v%22%3A%5B%2256%22%2C%2267%22%2C%2268%22%2C%2253%22%2C%2271%22%2C%2241%22%2C%2245%22%5D%7D%2C%7B%22n%22%3A%22type%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%227%22%5D%7D%2C%7B%22n%22%3A%22author%22%2C%22o%22%3A%22%3D%22%2C%22v%22%3A%5B%223645%22%5D%7D%5D%2C%22pp%22%3A100%2C%22pa%22%3A1%7D"
+};
+
+function extractIdFromUrl(url: string): string | null {
+  try {
+    const decoded = decodeURIComponent(url);
+    const match = decoded.match(/"n":"author","o":"=","v":\["(\d+)"\]/);
+    return match ? match[1] : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function LeadsView({ bugs }: LeadsViewProps) {
   const [platformFilter, setPlatformFilter] = useState<Platform | 'All'>('All');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
   const teamData = TEAMS.map(team => {
-    const allTeamMembers = [team.lead, ...team.members];
-    const teamBugs = bugs.filter(b => allTeamMembers.includes(b.assignedTo));
+    // Lead fuzzy name normalization
+    const normalize = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
+    const leadNormalized = normalize(team.lead);
+    
+    // Member IDs normalization
+    const memberIds = team.members.map(m => extractIdFromUrl(MEMBER_URLS[m])).filter(Boolean) as string[];
+
+    const teamBugs = bugs.filter(b => {
+      // Direct ID match for members
+      if (b.authorId && memberIds.includes(b.authorId)) return true;
+      // Fuzzy name match for Lead (fallback)
+      if (normalize(b.author || '').startsWith(leadNormalized)) return true;
+      return false;
+    });
+    
+    const teamPendingBugs = teamBugs.filter(b => b.status === 'Pending');
     
     const memberStats = team.members.map(name => {
-      const mBugs = bugs.filter(b => b.assignedTo === name);
+      const targetId = extractIdFromUrl(MEMBER_URLS[name]);
+      const mBugs = bugs.filter(b => b.authorId === targetId && b.status === 'Pending');
       return {
         name,
-        total: mBugs.length,
-        inTesting: mBugs.filter(b => b.status === 'In Testing').length,
-        pending: mBugs.filter(b => b.status === 'Pending').length,
+        pending: mBugs.length,
+        android: mBugs.filter(b => b.platform === 'Android').length,
+        ios: mBugs.filter(b => b.platform === 'iOS').length,
       };
     });
 
@@ -32,9 +66,9 @@ export function LeadsView({ bugs }: LeadsViewProps) {
       name: team.lead,
       members: team.members,
       platform: team.platform,
-      total: teamBugs.length,
-      inTesting: teamBugs.filter(b => b.status === 'In Testing').length,
-      pending: teamBugs.filter(b => b.status === 'Pending').length,
+      pending: teamPendingBugs.length,
+      android: teamPendingBugs.filter(b => b.platform === 'Android').length,
+      ios: teamPendingBugs.filter(b => b.platform === 'iOS').length,
       memberStats
     };
   });
@@ -44,12 +78,7 @@ export function LeadsView({ bugs }: LeadsViewProps) {
     : teamData.filter(t => t.platform === platformFilter);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="flex flex-col gap-8"
-    >
+    <div className="flex flex-col gap-8">
       <GlowWrapper className="flex items-center justify-between bg-white p-3 rounded-xl border border-black/[0.08] shadow-soft">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-slate-400">
@@ -110,80 +139,99 @@ export function LeadsView({ bugs }: LeadsViewProps) {
                   {team.platform}
                 </div>
 
-                <div className="flex flex-col items-end">
-                  <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Total</span>
-                  <span className="text-xl font-bold leading-none text-slate-800">{team.total}</span>
-                </div>
-
-                <div className="flex flex-col items-end">
+                <div className="flex flex-col items-end min-w-[100px]">
                   <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Pending</span>
-                  <span className="text-xl font-bold leading-none text-amber-600">{team.pending}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xl font-bold text-amber-600 leading-none">{team.pending}</span>
+                    {team.pending > 0 && (
+                      <div className="w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
+                        <div 
+                          style={{ width: `${(team.android / team.pending) * 100}%` }}
+                          className="bg-green-500 h-full transition-all duration-500"
+                        />
+                        <div 
+                          style={{ width: `${(team.ios / team.pending) * 100}%` }}
+                          className="bg-im-blue h-full transition-all duration-500"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <AnimatePresence>
-              {expandedTeam === team.name && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="bg-slate-50/30 border-t border-slate-50"
-                >
-                  <div className="p-6 bg-slate-50/50">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="h-px flex-1 bg-slate-200/50" />
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Squad Breakdown</div>
-                      <div className="h-px flex-1 bg-slate-200/50" />
-                    </div>
+            {expandedTeam === team.name && (
+              <div className="bg-slate-50/10 border-t border-slate-50">
+                <div className="p-6 bg-slate-50/20">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="h-px flex-1 bg-slate-200/40" />
+                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Squad Breakdown</div>
+                    <div className="h-px flex-1 bg-slate-200/40" />
+                  </div>
 
-                    <div className="grid grid-cols-12 gap-4 mb-2 text-[10px] uppercase font-bold tracking-wider text-slate-400 px-6">
-                      <div className="col-span-6">Member</div>
-                      <div className="col-span-2 text-right">Total</div>
-                      <div className="col-span-2 text-right">Pending</div>
-                      <div className="col-span-2 text-center">Workload</div>
+                  <div className="grid grid-cols-12 gap-4 mb-3 text-[10px] uppercase font-bold tracking-wider text-slate-400 px-6">
+                    <div className="col-span-7">Member</div>
+                    <div className="col-span-5 text-right flex items-center justify-end gap-3 px-4">
+                      <span>Total</span>
+                      <span>Platform Split (A/i)</span>
                     </div>
-                    
-                    <div className="flex flex-col gap-1.5">
-                      {team.memberStats.length > 0 ? (
-                        team.memberStats.map((member) => (
-                          <div key={member.name} className="grid grid-cols-12 items-center p-3.5 bg-white rounded-lg border border-slate-100 hover:border-slate-200 transition-all duration-200 shadow-sm group">
-                            <div className="col-span-6 flex items-center gap-3">
-                              <div className="w-1.5 h-1.5 rounded-full bg-slate-100 group-hover:bg-im-blue/20 transition-colors" />
-                              <span className="font-bold text-sm tracking-tight text-slate-700 group-hover:text-slate-900 transition-colors">
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5 px-2">
+                    {team.memberStats.length > 0 ? (
+                      team.memberStats.map((member) => (
+                        <div key={member.name} className="grid grid-cols-12 items-center p-3.5 bg-white rounded-xl border border-slate-100 hover:border-im-blue/20 hover:shadow-soft transition-all duration-300 group relative">
+                          <div className="col-span-7 flex items-center gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-slate-200 group-hover:bg-im-blue transition-all duration-300 transform group-hover:scale-125" />
+                            {MEMBER_URLS[member.name] ? (
+                              <a 
+                                href={MEMBER_URLS[member.name]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-bold text-sm tracking-tight text-slate-700 hover:text-im-blue transition-colors flex items-center gap-1.5"
+                                title={`Open project tasks for ${member.name}`}
+                              >
+                                {member.name}
+                                <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                              </a>
+                            ) : (
+                              <span className="font-bold text-sm tracking-tight text-slate-700">
                                 {member.name}
                               </span>
-                            </div>
-                            <div className="col-span-2 text-right font-bold text-sm text-slate-800">{member.total}</div>
-                            <div className="col-span-2 text-right font-bold text-sm text-amber-600">{member.pending}</div>
-                            <div className="col-span-2 px-4">
-                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                <motion.div 
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${Math.min((member.total / 12) * 100, 100)}%` }}
-                                  className={cn(
-                                    "h-full rounded-full transition-colors",
-                                    member.total > 10 ? "bg-im-red" : member.total > 5 ? "bg-im-blue" : "bg-im-teal"
-                                  )}
-                                />
+                            )}
+                          </div>
+                          
+                          <div className="col-span-5 flex items-center justify-end gap-5 px-4">
+                            <span className="text-base font-black tabular-nums text-slate-800 tracking-tight">{member.pending}</span>
+                            
+                            {/* Dual-Platform Integrated Pill */}
+                            <div className="flex bg-slate-50/80 p-0.5 rounded-lg border border-slate-100 shadow-sm overflow-hidden min-w-[70px]">
+                              <div className="flex-1 flex items-center justify-center gap-0.5 px-2 py-1 bg-white rounded-[6px] border border-green-100 shadow-sm">
+                                <span className="text-[10px] font-black text-green-600 leading-none">{member.android}</span>
+                                <span className="text-[8px] font-bold text-green-400 leading-none">A</span>
+                              </div>
+                              <div className="w-px h-4 bg-slate-200 self-center mx-1" />
+                              <div className="flex-1 flex items-center justify-center gap-0.5 px-2 py-1 bg-white rounded-[6px] border border-blue-100 shadow-sm">
+                                <span className="text-[10px] font-black text-im-blue leading-none">{member.ios}</span>
+                                <span className="text-[8px] font-bold text-blue-300 leading-none">i</span>
                               </div>
                             </div>
                           </div>
-                        ))
-                      ) : (
-                        <div className="p-10 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white/50">
-                          <div className="text-lg font-bold text-slate-300 mb-1">Hiring in process...</div>
-                          <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">No active members in this squad</div>
                         </div>
-                      )}
-                    </div>
+                      ))
+                    ) : (
+                      <div className="p-10 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white/50">
+                        <div className="text-lg font-bold text-slate-300 mb-1">Hiring in process...</div>
+                        <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">No active members in this squad</div>
+                      </div>
+                    )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+              </div>
+            )}
           </GlowWrapper>
         ))}
       </div>
-    </motion.div>
+    </div>
   );
 }
