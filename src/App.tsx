@@ -27,6 +27,8 @@ function App() {
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   const loadData = async (forceSync = false) => {
     setLoading(true);
     setError(null);
@@ -74,6 +76,11 @@ function App() {
     }
   }, [view, bugs]);
 
+  useEffect(() => {
+    // Close mobile menu when view changes
+    setIsMobileMenuOpen(false);
+  }, [view]);
+
   const stats = {
     android: dashboardData?.global.androidPending || 0,
     ios: dashboardData?.global.iosPending || 0,
@@ -92,11 +99,27 @@ function App() {
         setShowSettings={setIsSettingsOpen}
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}
+        isMobileOpen={isMobileMenuOpen}
+        setIsMobileOpen={setIsMobileMenuOpen}
       />
+
+      {/* Mobile Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden"
+          />
+        )}
+      </AnimatePresence>
 
       <main className={cn(
         "flex-1 overflow-y-auto custom-scrollbar relative z-10 transition-all duration-300",
-        isCollapsed ? "ml-[60px]" : "ml-[220px]"
+        isCollapsed ? "md:ml-[60px]" : "md:ml-[220px]",
+        "ml-0"
       )}>
         <Header 
           view={view} 
@@ -104,9 +127,11 @@ function App() {
           loading={loading || isSyncing}
           onRefresh={() => loadData(true)}
           syncing={isSyncing}
+          dashboardData={dashboardData}
+          toggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
 
-        <div className="p-10 max-w-[1600px] mx-auto min-h-[calc(100vh-80px)]">
+        <div className="p-4 md:p-10 max-w-[1600px] mx-auto min-h-[calc(100vh-80px)]">
           {!loading && !isSyncing && error && (
             <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
