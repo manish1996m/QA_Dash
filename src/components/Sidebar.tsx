@@ -19,6 +19,8 @@ interface SidebarProps {
   setShowSettings: (show: boolean) => void;
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
+  isMobileOpen: boolean;
+  setIsMobileOpen: (open: boolean) => void;
 }
 
 export function Sidebar({ 
@@ -29,12 +31,22 @@ export function Sidebar({
   loadData, 
   setShowSettings,
   isCollapsed,
-  setIsCollapsed
+  setIsCollapsed,
+  isMobileOpen,
+  setIsMobileOpen
 }: SidebarProps) {
+  const handleNavClick = (newView: 'management' | 'leads' | 'ai') => {
+    setView(newView);
+    if (window.innerWidth < 768) {
+      setIsMobileOpen(false);
+    }
+  };
+
   return (
     <nav className={cn(
-      "fixed left-0 top-0 h-full border-r border-slate-200 bg-white z-50 flex flex-col transition-all duration-300 ease-in-out shadow-sm",
-      isCollapsed ? "w-[60px]" : "w-[220px]"
+      "fixed left-0 top-0 h-full border-r border-slate-200 bg-white z-[60] flex flex-col transition-all duration-300 ease-in-out shadow-sm md:shadow-none",
+      isCollapsed ? "w-[60px]" : "w-[220px]",
+      isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
     )}>
       {/* Logo Section */}
       <div className="p-4 flex flex-col gap-4">
@@ -69,7 +81,7 @@ export function Sidebar({
         ].map((item) => (
           <button 
             key={item.id}
-            onClick={() => setView(item.id as any)}
+            onClick={() => handleNavClick(item.id as any)}
             title={isCollapsed ? item.label : undefined}
             className={cn(
               "flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200 group relative",

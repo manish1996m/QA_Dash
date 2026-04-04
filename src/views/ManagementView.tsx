@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { Bug, Platform } from '../types';
 import { DashboardData, PROJECTS, PRIORITIES, MODULE_CATEGORY_MAPPINGS } from '../services/openProject';
+import { getModuleLinks, getGlobalLink } from '../utils/openProjectLinks';
 import { MODULES } from '../constants';
 import { calculateTATExceeded } from '../utils/tat';
 import { cn } from '../utils/cn';
@@ -66,100 +67,7 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
     };
   }).sort((a, b) => b.count - a.count);
 
-  const getModuleLinks = (moduleName: string, platform: Platform) => {
-    const projectSlug = platform === 'Android' ? 'android' : 'iosnative';
-    const baseUrl = `https://project.intermesh.net/projects/${projectSlug}/work_packages`;
-    const categoryIds = MODULE_CATEGORY_MAPPINGS[moduleName]?.[platform] || [];
-    
-    const androidExcludedStatuses = ["41", "56", "45", "67", "68", "53"];
-    const iosExcludedStatuses = ["56", "67", "68", "53", "71", "41", "45"];
-    
-    let c: string[];
-    let hi: boolean;
-    let g: string;
-    let t: string;
-    
-    if (platform === 'Android') {
-      c = ["id", "subject", "priority", "author", "category", "customField6", "type", "status"];
-      hi = false;
-      g = "category";
-      t = "category:desc,priority:asc,id:asc";
-    } else {
-      c = ["id", "project", "subject", "type", "parent", "status", "priority", "author", "assignee", "responsible", "updatedAt", "category", "version", "createdAt", "customField1", "storyPoints", "remainingTime", "position"];
-      hi = true;
-      g = "";
-      t = "id:asc";
-    }
 
-    const excludedStatuses = platform === 'Android' ? androidExcludedStatuses : iosExcludedStatuses;
-    
-    const getQueryProps = (priorities: string[], tatDays?: string) => {
-      const filters: any[] = [
-        { n: "status", o: "!", v: excludedStatuses },
-        { n: "type", o: "=", v: ["7"] },
-        { n: "priority", o: "=", v: priorities }
-      ];
-
-      if (tatDays) {
-        filters.push({ n: "createdAt", o: "<t-", v: [tatDays] });
-      }
-
-      if (categoryIds.length > 0) {
-        filters.push({ n: "category", o: "=", v: categoryIds });
-      } else {
-        filters.push({ n: "subject", o: "~", v: [moduleName] });
-      }
-
-      return {
-        c, hi, g, is: true, tv: false, hl: "none", t,
-        f: filters,
-        pp: 100,
-        pa: 1
-      };
-    };
-
-    return {
-      hp_mp: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.HIGH, PRIORITIES.MEDIUM])))}`,
-      low: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.LOW])))}`,
-      tatHigh: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.HIGH], "3")))}`,
-      tatMedium: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.MEDIUM], "7")))}`,
-      tatLow: `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(getQueryProps([PRIORITIES.LOW], "15")))}`
-    };
-  };
-
-  const getGlobalLink = (platform: Platform, highOnly: boolean = false) => {
-    const projectId = platform === 'Android' ? PROJECTS.ANDROID : PROJECTS.IOS;
-    const baseUrl = `https://project.intermesh.net/projects/${projectId}/work_packages`;
-    
-    // Exact same filters as OpenProject UI
-    const androidExcludedStatuses = ["41", "56", "45", "67", "68", "53"];
-    const iosExcludedStatuses = ["56", "67", "68", "53", "71", "41", "45"];
-    const excludedStatuses = platform === 'Android' ? androidExcludedStatuses : iosExcludedStatuses;
-
-    const filters: any[] = [
-      { n: "status", o: "!", v: excludedStatuses },
-      { n: "type", o: "=", v: ["7"] }
-    ];
-
-    if (highOnly) {
-      filters.push({ n: "priority", o: "=", v: [PRIORITIES.HIGH] });
-    }
-
-    const queryProps = {
-      c: ["id", "subject", "priority", "author", "category", "type", "status"],
-      hi: false,
-      g: "category",
-      is: true,
-      tv: false,
-      hl: "none",
-      t: "category:desc,priority:asc,id:asc",
-      f: filters,
-      pp: 100,
-      pa: 1
-    };
-
-    return `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(queryProps))}`;
-  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -192,11 +100,11 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
         />
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        <GlowWrapper className="col-span-12 lg:col-span-8 bg-white p-6 rounded-xl border border-black/[0.08] shadow-soft">
-          <div className="flex items-center justify-between mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <GlowWrapper className="lg:col-span-8 bg-white p-4 md:p-6 rounded-xl border border-black/[0.08] shadow-soft">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
             <h3 className="text-base font-bold text-slate-800">Priority Distribution</h3>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {priorityData.map(d => (
                 <div key={d.name} className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 rounded-md border border-slate-100">
                   <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: d.color }} />
@@ -212,8 +120,8 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                   data={priorityData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={70}
-                  outerRadius={110}
+                  innerRadius={60}
+                  outerRadius={100}
                   paddingAngle={8}
                   dataKey="value"
                   stroke="none"
@@ -235,7 +143,7 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
           </div>
         </GlowWrapper>
 
-        <GlowWrapper className="col-span-12 lg:col-span-4 bg-white p-6 rounded-xl border border-black/[0.08] shadow-soft">
+        <GlowWrapper className="lg:col-span-4 bg-white p-4 md:p-6 rounded-xl border border-black/[0.08] shadow-soft">
           <h3 className="text-base font-bold text-slate-800 mb-6">Platform Split</h3>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -273,17 +181,17 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
       </div>
 
       <GlowWrapper className="bg-white rounded-xl border border-black/[0.08] shadow-soft overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-4">
           <div className="flex flex-col">
             <h3 className="text-base font-bold text-slate-800">Module Wise Breakdown</h3>
             <p className="text-[11px] text-slate-400 font-medium">Detailed bug distribution across system modules</p>
           </div>
-          <div className="px-2.5 py-1 bg-im-blue/5 border border-im-blue/10 rounded-full text-[10px] font-bold text-im-blue uppercase tracking-wider">
+          <div className="w-fit px-2.5 py-1 bg-im-blue/5 border border-im-blue/10 rounded-full text-[10px] font-bold text-im-blue uppercase tracking-wider">
             Pending Bugs
           </div>
         </div>
         
-        <div className="p-4 flex flex-col gap-2">
+        <div className="p-2 md:p-4 flex flex-col gap-2">
           {moduleData.map(m => (
             <div key={m.name} className="group">
               <div 
@@ -292,13 +200,13 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                   setExpandedPlatform(null);
                 }}
                 className={cn(
-                  "p-3.5 flex items-center justify-between cursor-pointer rounded-lg transition-all duration-200 border",
+                  "p-3 md:p-3.5 flex items-center justify-between cursor-pointer rounded-lg transition-all duration-200 border",
                   expandedModule === m.name 
                     ? "bg-im-blue text-white border-im-blue shadow-sm" 
                     : "bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50"
                 )}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3">
                   <div className={cn(
                     "w-6 h-6 flex items-center justify-center rounded-md transition-all duration-300",
                     expandedModule === m.name 
@@ -308,7 +216,7 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                     <ChevronRight className="w-4 h-4" />
                   </div>
                   <span className={cn(
-                    "font-bold uppercase tracking-wider text-[11px]",
+                    "font-bold uppercase tracking-wider text-[10px] md:text-[11px]",
                     expandedModule === m.name ? "text-white" : "text-slate-600"
                   )}>{m.name}</span>
                 </div>
@@ -316,11 +224,11 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col items-end">
                     <span className={cn(
-                      "text-[9px] uppercase font-bold tracking-wider",
+                      "text-[8px] md:text-[9px] uppercase font-bold tracking-wider",
                       expandedModule === m.name ? "text-white/60" : "text-slate-400"
                     )}>Pending</span>
                     <span className={cn(
-                      "text-xl font-bold leading-none",
+                      "text-lg md:text-xl font-bold leading-none",
                       expandedModule === m.name ? "text-white" : "text-im-blue"
                     )}>{m.count}</span>
                   </div>
@@ -329,7 +237,7 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
 
                 {expandedModule === m.name && (
                   <div className="overflow-hidden">
-                    <div className="p-3 flex flex-col gap-2 bg-slate-50/50 rounded-b-xl mx-2 border-x border-b border-black/[0.05]">
+                    <div className="p-2 md:p-3 flex flex-col gap-2 bg-slate-50/50 rounded-b-xl mx-1 md:mx-2 border-x border-b border-black/[0.05]">
                       {['Android', 'iOS'].map(platform => {
                         const platformStats = dashboardData?.moduleStats[m.name]?.[platform as Platform];
                         const platformBugs = platformStats?.bugs || [];
@@ -345,7 +253,7 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                                 <div className="p-1.5 bg-slate-50 rounded-lg text-im-blue border border-black/[0.05]">
                                   {platform === 'Android' ? <Smartphone className="w-3.5 h-3.5" /> : <Apple className="w-3.5 h-3.5" />}
                                 </div>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">{platform} {m.name}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">{platform}</span>
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-[11px] font-mono font-bold text-im-blue bg-im-blue/5 px-2.5 py-0.5 rounded-full border border-im-blue/10">
@@ -356,9 +264,9 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
                             </div>
 
                               {isExpanded && (
-                                <div className="border-t border-black/[0.05] p-5 bg-slate-50/30">
-                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                    <div className="grid grid-cols-2 gap-3">
+                                <div className="border-t border-black/[0.05] p-3 md:p-5 bg-slate-50/30">
+                                  <div className="flex flex-col lg:flex-row gap-5">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
                                       <div className="p-4 bg-white rounded-xl border border-black/[0.08] shadow-sm flex flex-col gap-2">
                                         <div className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
                                           High + Medium Priority
