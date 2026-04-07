@@ -12,7 +12,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
 import fs from "fs";
-import { saveBugs, getAllBugs, clearBugs } from "./db/database";
+import { saveBugs, getAllBugs, clearBugs, queryChatbot, getSnapshots } from "./db/database";
 
 dotenv.config();
 
@@ -76,6 +76,16 @@ async function startServer() {
     } catch (error) {
       console.error("DB Fetch Error:", error);
       res.status(500).json({ error: "Failed to fetch bugs." });
+    }
+  });
+
+  // Get historical snapshots
+  app.get("/api/db/snapshots", (req, res) => {
+    try {
+      const snapshots = getSnapshots(30);
+      res.json(snapshots);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch snapshots" });
     }
   });
 
@@ -208,6 +218,21 @@ async function startServer() {
       res.status(response.status).json(data);
     } catch (error) {
       res.status(500).json({ error: "Proxy Error" });
+    }
+  });
+
+  // AI SQL Query: Execute SELECT queries from Chatbot
+  app.post("/api/ai/query", async (req, res) => {
+    const { sql, params } = req.body;
+    if (!sql) return res.status(400).json({ error: "No SQL provided" });
+
+    try {
+      console.log(`[AI-SQL] Executing: ${sql}`);
+      const results = queryChatbot(sql, params || []);
+      res.json(results);
+    } catch (error: any) {
+      console.error("[AI-SQL] Error:", error.message);
+      res.status(400).json({ error: error.message });
     }
   });
 

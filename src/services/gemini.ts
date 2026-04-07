@@ -11,146 +11,180 @@ function getModelName() {
   return localStorage.getItem('gemini_model') || 'gemini-1.5-flash';
 }
 
-export async function getQAInsights(bugs: Bug[]) {
+async function callGemini(prompt: string) {
+  const key = getApiKey();
+  const model = getModelName();
+  if (!key) throw new Error("Missing Gemini API Key");
+
+  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }]
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+export async function getQAInsights(bugs: Bug[], snapshots: any[] = []) {
   if (!bugs || bugs.length === 0) return null;
   
-  const key = getApiKey();
-  if (!key) return null;
-
-  const model = getModelName();
-
-  // Create a balanced sample for general insights
-  const bugSummary = bugs.map(b => ({
-    title: b.title,
-    priority: b.priority,
-    status: b.status,
-    platform: b.platform,
-    category: b.category,
-    module: b.module
-  }));
-
-  const prompt = `
-    As a Senior QA Manager, analyze the following bug summary from IndiaMART's QA Insight Dashboard.
-    Provide a concise summary of the current QA state, identify the top 3 risks, and suggest 3 immediate actions.
-    
-    Data Summary:
-    ${JSON.stringify(bugSummary.slice(0, 50))} 
-    
-    Format your response AS RAW JSON with the following structure (no markdown fences):
-    {
-      "bottleneck": "string",
-      "riskLevel": "High | Medium | Low",
-      "riskScore": number (1-3),
-      "trend": "string",
-      "analysis": "markdown string",
-      "recommendations": ["string", "string", "string"]
-    }
-  `;
-
   try {
-    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
+    const bugSummary = bugs.map(b => ({
+      priority: b.priority,
+      status: b.status,
+      platform: b.platform,
+      category: b.category,
+      module: b.module
+    }));
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || `API Error: ${response.status}`);
-    }
+    const trendSummary = snapshots.slice(-7).map(s => ({
+      date: s.timestamp,
+      total: s.total_count,
+      high: s.high_priority_count
+    }));
 
-    const data = await response.json();
-    const text = data.candidates[0].content.parts[0].text;
-    
+    // Pre-calculate counts to ensure prompt accuracy
+    const highCount = snapshots[snapshots.length - 1]?.high_priority_count || 0;
+    const mediumCount = snapshots[snapshots.length - 1]?.medium_priority_count || 0;
+    const lowCount = snapshots[snapshots.length - 1]?.low_priority_count || 0;
+
+    const prompt = `
+      As a Senior QA Manager, analyze this bug summary AND historical trend from IndiaMART's QA Dashboard.
+      
+      CURRENT STATS:
+      - High Priority Bugs: ${highCount}
+      - Medium Priority Bugs: ${mediumCount}
+      - Low Priority Bugs: ${lowCount}
+      
+      HISTORICAL TREND (Last 15 snapshots):
+      ${JSON.stringify(trendSummary)}
+      
+      CRITICAL RULE:
+      Calculate a "Release Readiness Score" (0-100%) based ONLY on High (H) and Medium (M) bugs.
+      
+      SCORING LOGIC (STRICT):
+      1. START at 100.
+      2. DEDUCT -15% for EVERY single High Priority bug.
+      3. DEDUCT -2% for EVERY single Medium Priority bug.
+      4. IGNORE Low Priority bugs (they do not affect readiness).
+      5. The score CANNOT be 100% if High > 0 or Medium > 5.
+      6. If calculation goes below 0, return 0.
+      
+      Based on the velocity (how fast bugs are being resolved or added), provide:
+      1. A concise bottleneck analysis.
+      2. A Risk Level and Score.
+      3. A "Trend" description (Improving/Degrading/Stagnant).
+      4. Strategic Recommendations.
+      5. A PREDICTED DATE (approximate) when HIGH+MEDIUM bug count will reach zero.
+      6. A "readinessScore" (0 to 100) based ONLY on H and M priority data.
+      
+      Format response AS RAW JSON:
+      {
+        "bottleneck": "string",
+        "riskLevel": "High | Medium | Low",
+        "riskScore": number (1-3),
+        "readinessScore": number (0-100),
+        "trend": "string",
+        "analysis": "markdown string (include the Predicted Zero-Bug Date and Readiness analysis here)",
+        "recommendations": ["string", "string", "string"]
+      }
+    `;
+
+    const text = await callGemini(prompt);
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-    return JSON.parse(text);
+    return JSON.parse(jsonMatch ? jsonMatch[0] : text);
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini Insights Error:", error);
     return null;
   }
 }
 
 export async function askQAAssist(bugs: Bug[], question: string, dashboardData?: DashboardData | null): Promise<string> {
-  if (!bugs || bugs.length === 0) return "I don't have any bug data. Please click 'Sync Data' to fetch data from OpenProject!";
-
+  if (!bugs || bugs.length === 0) return "No bug data available. Please sync first!";
+  
   const key = getApiKey();
   if (!key) return "Please provide a Gemini API Key in Settings.";
 
-  const model = getModelName();
-
-  // Generate dynamic category & status stats from the local DB data
-  const categoryMap: Record<string, { Android: number, iOS: number }> = {};
-  const assigneeMap: Record<string, { total: number, high: number, medium: number, low: number }> = {};
-
-  bugs.forEach(b => {
-    // Category mapping
-    const cat = b.category || 'General';
-    if (!categoryMap[cat]) categoryMap[cat] = { Android: 0, iOS: 0 };
-    categoryMap[cat][b.platform as 'Android' | 'iOS']++;
-
-    // Assignee mapping
-    const assignee = b.assignedTo || 'Unassigned';
-    if (!assigneeMap[assignee]) assigneeMap[assignee] = { total: 0, high: 0, medium: 0, low: 0 };
-    assigneeMap[assignee].total++;
-    if (b.priority === 'High') assigneeMap[assignee].high++;
-    else if (b.priority === 'Medium') assigneeMap[assignee].medium++;
-    else assigneeMap[assignee].low++;
-  });
-
-  const prompt = `
-    You are "QA Assist", an expert QA manager for IndiaMART.
-    You have 100% access to the database-backed bug data via the summaries below.
+  const schemaContext = `
+    Table: bugs
+    Columns: id, title, description, category, priority, status, platform, module, assignedTo, author, createdAt, tatExceeded (1 or 0)
     
-    OFFICIAL DASHBOARD STATS:
-    - Android Total: ${dashboardData?.global.androidPending || 0}
-    - iOS Total: ${dashboardData?.global.iosPending || 0}
-    - Android High: ${dashboardData?.global.androidHigh || 0}
-    - iOS High: ${dashboardData?.global.iosHigh || 0}
-    
-    DETAILED ASSIGNEE ROSTER (Who holds what bugs):
-    ${Object.entries(assigneeMap)
-      .sort((a, b) => b[1].total - a[1].total)
-      .map(([name, counts]) => `- ${name}: ${counts.total} total bugs (High: ${counts.high}, Medium: ${counts.medium}, Low: ${counts.low})`)
-      .join('\n')}
-
-    DETAILED CATEGORY BREAKDOWN:
-    ${Object.entries(categoryMap).map(([cat, counts]) => `- ${cat}: [Android: ${counts.Android}, iOS: ${counts.iOS}]`).join('\n')}
-    
-    RICH CONTEXT (Latest 150 bugs with descriptions):
-    ${bugs.slice(0, 150).map(b => `- [${b.platform}] [Priority: ${b.priority}] [Assignee: ${b.assignedTo}] ${b.title}: ${b.description?.substring(0, 150)}...`).join('\n')}
-    
-    User Question: "${question}"
-    
-    GUIDELINES:
-    1. If the user asks for "LMS", sum up all LMS-related categories.
-    2. If the user asks about the "details" or "description" of a bug, use the Rich Context above.
-    3. Be extremely accurate with counts. Use the Assignee Roster meticulously when asked "how many bugs are with X".
-    4. If the user asks about something not in the sample, refer to the Category Breakdown or Assignee Roster.
+    Platform values: 'Android', 'iOS'
+    Priority values: 'High', 'Medium', 'Low', 'Normal'
+    Status values: 'Pending', 'In Testing'
   `;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
+    // Step 1: Reasoning - Decide if we need SQL
+    const reasoningPrompt = `
+      You are "QA Assist" for IndiaMART. 
+      Database Schema:
+      ${schemaContext}
+      
+      User Question: "${question}"
+      
+      If the question requires counting, listing, or specific data from the database, respond ONLY with a JSON object:
+      {"sql": "SELECT ..."}
+      
+      Otherwise, if it's a general greeting or non-data question, respond with the answer directly.
+      
+      IMPORTANT:
+      - Use 'LIKE' for module or category names if unsure.
+      - 'tatExceeded = 1' means TAT is exceeded.
+      - Always return results related to the user's question.
+    `;
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      return `API Error: ${errorData.error?.message || "Unknown error"}`;
+    const firstResponse = await callGemini(reasoningPrompt);
+    
+    let sqlMatch = null;
+    try {
+      const parsed = JSON.parse(firstResponse.match(/\{[\s\S]*\}/)?.[0] || firstResponse);
+      if (parsed.sql) sqlMatch = parsed.sql;
+    } catch (e) {
+      // Not JSON, probably a direct answer
+      return firstResponse;
     }
 
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    if (sqlMatch) {
+      // Step 2: Execute SQL via backend
+      const queryResponse = await fetch("/api/ai/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql: sqlMatch })
+      });
+
+      if (!queryResponse.ok) {
+        const err = await queryResponse.json();
+        throw new Error(err.error || "Query failed");
+      }
+
+      const dbResults = await queryResponse.json();
+
+      // Step 3: Final Answer
+      const finalPrompt = `
+        User Question: "${question}"
+        Database Results: ${JSON.stringify(dbResults)}
+        
+        Provide a friendly, accurate answer based ONLY on the data above. 
+        If counts are requested, give the exact numbers from the results.
+        If no data was found, explain that politely.
+      `;
+
+      return await callGemini(finalPrompt);
+    }
+
+    return firstResponse;
   } catch (error: any) {
-    console.error("Gemini Chat Error:", error);
-    return `Chat Error: ${error.message}`;
+    console.error("QA Assist Error:", error);
+    return `Error: ${error.message}. I might be having trouble connecting to the database!`;
   }
 }
