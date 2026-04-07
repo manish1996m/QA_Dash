@@ -4,7 +4,9 @@ import {
   Apple, 
   AlertCircle, 
   ChevronRight, 
-  ExternalLink 
+  ExternalLink,
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -17,24 +19,29 @@ import {
   Bar, 
   XAxis, 
   YAxis, 
-  CartesianGrid 
+  CartesianGrid,
+  AreaChart,
+  Area
 } from 'recharts';
 import { Bug, Platform } from '../types';
-import { DashboardData, PROJECTS, PRIORITIES, MODULE_CATEGORY_MAPPINGS } from '../services/openProject';
+import { DashboardData, PROJECTS, PRIORITIES, MODULE_CATEGORY_MAPPINGS, BugSnapshot } from '../services/openProject';
 import { getModuleLinks, getGlobalLink } from '../utils/openProjectLinks';
 import { MODULES } from '../constants';
 import { calculateTATExceeded } from '../utils/tat';
 import { cn } from '../utils/cn';
 import { StatCard } from '../components/StatCard';
 import { GlowWrapper } from '../components/GlowWrapper';
+import { format } from 'date-fns';
 
 interface ManagementViewProps {
   bugs: Bug[];
   stats: any;
   dashboardData: DashboardData | null;
+  snapshots: BugSnapshot[];
+  aiInsights: any;
 }
 
-export function ManagementView({ bugs, stats, dashboardData }: ManagementViewProps) {
+export function ManagementView({ bugs, stats, dashboardData, snapshots, aiInsights }: ManagementViewProps) {
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
 
@@ -98,6 +105,192 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
           link={getGlobalLink('iOS', true)}
           variant="danger"
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Historical Bug Trend Section (8/12) */}
+        <div className="lg:col-span-8">
+          {snapshots && snapshots.length > 1 && (
+            <GlowWrapper className="bg-white p-4 md:p-8 rounded-2xl border border-black/[0.08] shadow-soft overflow-hidden group h-full">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-im-blue/5 rounded-2xl border border-im-blue/10 shrink-0">
+                    <div className="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm border border-black/[0.03]">
+                      <RefreshCw className="w-4 h-4 text-im-blue animate-spin-slow" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <h3 className="text-xl font-black text-slate-800 tracking-tight">Historical Bug Trend</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Project Velocity & Burn-down</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 md:gap-8">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Daily Change</span>
+                    <div className={cn(
+                      "text-base font-black tabular-nums flex items-center gap-1.5",
+                      snapshots[snapshots.length-1].total_count <= snapshots[snapshots.length-2].total_count 
+                        ? "text-im-teal" 
+                        : "text-im-red"
+                    )}>
+                      {snapshots[snapshots.length-1].total_count - snapshots[snapshots.length-2].total_count > 0 ? '+' : ''}
+                      {snapshots[snapshots.length-1].total_count - snapshots[snapshots.length-2].total_count}
+                    </div>
+                  </div>
+                  <div className="h-10 w-px bg-slate-100 hidden sm:block" />
+                  <div className="flex flex-col items-end">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Current Trend</span>
+                    <span className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-full text-[9px] font-black text-slate-700 uppercase tracking-widest shadow-sm">
+                      {snapshots[snapshots.length-1].total_count <= snapshots[snapshots.length-2].total_count ? 'Improving' : 'Degrading'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-[280px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={snapshots}>
+                    <defs>
+                      <linearGradient id="colorHigh" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorMedium" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorLow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis 
+                      dataKey="timestamp" 
+                      tickFormatter={(ts) => format(new Date(ts), 'MMM d')}
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      fontWeight="bold"
+                      tickLine={false}
+                      axisLine={false}
+                      dy={10}
+                    />
+                    <YAxis 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      fontWeight="bold"
+                      tickLine={false}
+                      axisLine={false}
+                      dx={-10}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                        backdropFilter: 'blur(8px)', 
+                        borderRadius: '16px', 
+                        border: '1px solid rgba(0, 0, 0, 0.05)', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                        padding: '12px'
+                      }}
+                      labelFormatter={(label) => format(new Date(label), 'EEEE, MMMM d, yyyy')}
+                      itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="low_priority_count" 
+                      stackId="1"
+                      stroke="#10b981" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorLow)" 
+                      name="Low Priority"
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="medium_priority_count" 
+                      stackId="1"
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorMedium)" 
+                      name="Medium Priority"
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="high_priority_count" 
+                      stackId="1"
+                      stroke="#ef4444" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorHigh)" 
+                      name="High Priority"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </GlowWrapper>
+          )}
+        </div>
+
+        {/* AI Release Readiness Gauge (4/12) */}
+        <div className="lg:col-span-4">
+          <GlowWrapper glowColor={aiInsights?.readinessScore >= 80 ? "rgba(16, 185, 129, 0.4)" : aiInsights?.readinessScore >= 50 ? "rgba(245, 158, 11, 0.4)" : "rgba(239, 68, 68, 0.4)"} className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-soft h-full flex flex-col items-center justify-center text-center">
+            <div className="mb-6">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <Zap className={cn(
+                  "w-4 h-4",
+                  aiInsights?.readinessScore >= 80 ? "text-emerald-500" : aiInsights?.readinessScore >= 50 ? "text-amber-500" : "text-rose-500"
+                )} />
+                <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">AI Release Readiness</h3>
+              </div>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">High & Medium Impacts only</p>
+            </div>
+
+            <div className="relative w-44 h-44 flex items-center justify-center">
+              <svg className="absolute w-full h-full transform -rotate-90">
+                <circle cx="88" cy="88" r="76" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-50" />
+                <circle 
+                  cx="88" cy="88" r="76" 
+                  stroke="currentColor" strokeWidth="12" 
+                  fill="transparent" 
+                  strokeDasharray={477}
+                  strokeDashoffset={477 - (477 * (aiInsights?.readinessScore || 0)) / 100}
+                  strokeLinecap="round"
+                  className={cn(
+                    "transition-all duration-1000",
+                    aiInsights?.readinessScore >= 80 ? "text-emerald-500" : aiInsights?.readinessScore >= 50 ? "text-amber-500" : "text-rose-500"
+                  )}
+                />
+              </svg>
+              <div className="flex flex-col items-center z-10">
+                <span className={cn(
+                  "text-5xl font-black tracking-tighter leading-none",
+                  aiInsights?.readinessScore >= 80 ? "text-emerald-600" : aiInsights?.readinessScore >= 50 ? "text-amber-600" : "text-rose-600"
+                )}>
+                  {aiInsights?.readinessScore !== undefined ? `${aiInsights.readinessScore}%` : '--'}
+                </span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Ready</span>
+              </div>
+            </div>
+
+            <div className="mt-8 px-4 text-center">
+              <p className="text-xs font-bold text-slate-700 leading-relaxed italic">
+                "{aiInsights?.readinessScore >= 80 ? "Release risk is minimal. Proceed." : aiInsights?.readinessScore >= 50 ? "Stabilization in progress. Monitor closely." : "Significant High/Med risk detected."}"
+              </p>
+              <div className="mt-4 pt-4 border-t border-slate-50 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold text-slate-400 uppercase">Input:</span>
+                  <span className="font-black text-slate-600 uppercase tracking-tighter">H & M Priority Data</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-bold text-slate-400 uppercase">Logic:</span>
+                  <span className="font-black text-slate-600 uppercase tracking-tighter">Zero-Tolerance H/M</span>
+                </div>
+              </div>
+            </div>
+          </GlowWrapper>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
