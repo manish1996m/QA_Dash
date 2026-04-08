@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Smartphone, 
   Apple, 
   AlertCircle, 
   ChevronRight, 
-  ExternalLink 
+  ExternalLink,
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -17,26 +19,152 @@ import {
   Bar, 
   XAxis, 
   YAxis, 
-  CartesianGrid 
+  CartesianGrid,
+  AreaChart,
+  Area
 } from 'recharts';
 import { Bug, Platform } from '../types';
-import { DashboardData, PROJECTS, PRIORITIES, MODULE_CATEGORY_MAPPINGS } from '../services/openProject';
+import { DashboardData, PROJECTS, PRIORITIES, MODULE_CATEGORY_MAPPINGS, BugSnapshot } from '../services/openProject';
 import { getModuleLinks, getGlobalLink } from '../utils/openProjectLinks';
 import { MODULES } from '../constants';
 import { calculateTATExceeded } from '../utils/tat';
 import { cn } from '../utils/cn';
 import { StatCard } from '../components/StatCard';
 import { GlowWrapper } from '../components/GlowWrapper';
+import { format, subDays, startOfDay, isBefore, parseISO, isSameDay } from 'date-fns';
+import { getQAInsights } from '../services/gemini';
 
 interface ManagementViewProps {
   bugs: Bug[];
   stats: any;
   dashboardData: DashboardData | null;
+  snapshots: BugSnapshot[];
+  aiInsights: any;
 }
 
-export function ManagementView({ bugs, stats, dashboardData }: ManagementViewProps) {
+export function ManagementView({ bugs, stats, dashboardData, snapshots, aiInsights: globalAiInsights }: ManagementViewProps) {
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
+  
+  // New state for Release-specific analysis
+  const [selectedProject, setSelectedProject] = useState<Platform | 'All'>('All');
+  const [selectedRelease, setSelectedRelease] = useState<string>('All');
+  const [localAiInsights, setLocalAiInsights] = useState<any>(null);
+  const [localAiLoading, setLocalAiLoading] = useState(false);
+
+  // Extract unique release cycles filtered by project
+  const availableReleases = useMemo(() => {
+    const releases = new Set<string>();
+    bugs.forEach(b => {
+      // Only include versions for the currently selected project (if not All)
+      const projectMatch = selectedProject === 'All' || b.platform === selectedProject;
+      if (projectMatch && b.version && b.version !== 'None') {
+        const match = b.version.match(/(\d+\.\d+\.\d+)/);
+        if (match) {
+          releases.add(match[1]);
+        } else {
+          releases.add(b.version);
+        }
+      }
+    });
+    return Array.from(releases).sort().reverse();
+  }, [bugs, selectedProject]);
+
+  // Combined filtered bugs for AI analysis
+  const filteredBugs = useMemo(() => {
+    return bugs.filter(b => {
+      const projectMatch = selectedProject === 'All' || b.platform === selectedProject;
+      const releaseMatch = selectedRelease === 'All' || (b.version && b.version.includes(selectedRelease));
+      return projectMatch && releaseMatch;
+    });
+  }, [bugs, selectedProject, selectedRelease]);
+
+  // Use local insights if available (from specific selection), otherwise global
+  const activeAiInsights = localAiInsights || globalAiInsights;
+
+  const handleRefineAnalysis = React.useCallback(async () => {
+    if (selectedProject === 'All' && selectedRelease === 'All') {
+      setLocalAiInsights(null); // Reset to global
+      return;
+    }
+    
+    setLocalAiLoading(true);
+    try {
+      // Calculate a base mathematical score to guide the AI towards accuracy
+      const highCount = filteredBugs.filter(b => b.priority === 'High').length;
+      const medCount = filteredBugs.filter(b => b.priority === 'Medium').length;
+      const lowCount = filteredBugs.filter(b => b.priority === 'Low' || b.priority === 'Normal').length;
+      const total = filteredBugs.length;
+      
+      // Base Score logic: Start at 100. Subtract 30 per High, 10 per Medium.
+      // Low bugs are minor, so only subtract 0.5 per bug.
+      let baseScore = 100;
+      if (total > 0) {
+        baseScore = 100 - (highCount * 30) - (medCount * 10) - (lowCount * 0.5);
+        
+        // If no High/Medium bugs, the score should ideally be in the 90s
+        if (highCount === 0 && medCount === 0) {
+          baseScore = Math.max(90, baseScore);
+        } else if (highCount === 0 && medCount <= 5) {
+          // If 1-5 Medium bugs, keep it in the 75-89 range
+          baseScore = Math.max(75, baseScore);
+        }
+        
+        baseScore = Math.max(5, Math.min(100, Math.round(baseScore)));
+      }
+
+      const { getQAInsights } = await import('../services/gemini');
+      const releaseContext = selectedRelease !== 'All' 
+        ? `${selectedProject === 'All' ? '' : selectedProject} Release ${selectedRelease}`.trim()
+        : selectedProject !== 'All' ? `${selectedProject} Project` : undefined;
+        
+      const insights = await getQAInsights(filteredBugs, snapshots, releaseContext, baseScore);
+      setLocalAiInsights(insights);
+    } catch (error) {
+      console.error('Refine failed:', error);
+    } finally {
+      setLocalAiLoading(false);
+    }
+  }, [selectedProject, selectedRelease, filteredBugs, snapshots]);
+
+  // Auto-trigger analysis when filters change (with small debounce)
+  React.useEffect(() => {
+    if (selectedProject === 'All' && selectedRelease === 'All') {
+      setLocalAiInsights(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      handleRefineAnalysis();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedProject, selectedRelease, handleRefineAnalysis]);
+
+  // Generate fallback trend if snapshots are missing
+  const chartData = useMemo(() => {
+    if (snapshots && snapshots.length > 1) return snapshots;
+    
+    // Fallback: Bug Arrival Trend (how many currently pending bugs existed at each point in time)
+    const fallback = [];
+    const now = new Date();
+    for (let i = 14; i >= 0; i--) {
+      const date = startOfDay(subDays(now, i));
+      const bugsUntilThen = bugs.filter(b => {
+        const createdDate = parseISO(b.createdAt);
+        return isBefore(createdDate, date) || isSameDay(createdDate, date);
+      });
+      
+      fallback.push({
+        timestamp: date.toISOString(),
+        total_count: bugsUntilThen.length,
+        high_priority_count: bugsUntilThen.filter(b => b.priority === 'High').length,
+        medium_priority_count: bugsUntilThen.filter(b => b.priority === 'Medium').length,
+        low_priority_count: bugsUntilThen.filter(b => b.priority === 'Low' || b.priority === 'Normal').length,
+      });
+    }
+    return fallback;
+  }, [snapshots, bugs]);
 
   const priorityData = [
     { name: 'High', value: bugs.filter(b => b.priority === 'High').length, color: '#d32f2f' },
@@ -67,8 +195,6 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
     };
   }).sort((a, b) => b.count - a.count);
 
-
-
   return (
     <div className="flex flex-col gap-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -98,6 +224,280 @@ export function ManagementView({ bugs, stats, dashboardData }: ManagementViewPro
           link={getGlobalLink('iOS', true)}
           variant="danger"
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Historical Bug Trend Section (8/12) */}
+        <div className="lg:col-span-8">
+          {chartData && (
+            <GlowWrapper className="bg-white p-4 md:p-8 rounded-2xl border border-black/[0.08] shadow-soft overflow-hidden group h-full">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-im-blue/5 rounded-2xl border border-im-blue/10 shrink-0">
+                    <div className="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm border border-black/[0.03]">
+                      <RefreshCw className="w-4 h-4 text-im-blue animate-spin-slow" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <h3 className="text-xl font-black text-slate-800 tracking-tight">
+                      {snapshots.length > 1 ? 'Historical Bug Trend' : 'Pending Bug Arrival'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      {snapshots.length > 1 ? 'Project Velocity & Burn-down' : '15-Day Arrival Growth'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 md:gap-8">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Daily Change</span>
+                    <div className={cn(
+                      "text-base font-black tabular-nums flex items-center gap-1.5",
+                      chartData[chartData.length-1].total_count <= chartData[chartData.length-2].total_count 
+                        ? "text-im-teal" 
+                        : "text-im-red"
+                    )}>
+                      {chartData[chartData.length-1].total_count - chartData[chartData.length-2].total_count > 0 ? '+' : ''}
+                      {chartData[chartData.length-1].total_count - chartData[chartData.length-2].total_count}
+                    </div>
+                  </div>
+                  <div className="h-10 w-px bg-slate-100 hidden sm:block" />
+                  <div className="flex flex-col items-end">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Current Trend</span>
+                    <span className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-full text-[9px] font-black text-slate-700 uppercase tracking-widest shadow-sm">
+                      {chartData[chartData.length-1].total_count <= chartData[chartData.length-2].total_count ? 'Improving' : 'Degrading'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-[280px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorHigh" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorMedium" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorLow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis 
+                      dataKey="timestamp" 
+                      tickFormatter={(ts) => format(new Date(ts), 'MMM d')}
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      fontWeight="bold"
+                      tickLine={false}
+                      axisLine={false}
+                      dy={10}
+                    />
+                    <YAxis 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      fontWeight="bold"
+                      tickLine={false}
+                      axisLine={false}
+                      dx={-10}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                        backdropFilter: 'blur(8px)', 
+                        borderRadius: '16px', 
+                        border: '1px solid rgba(0, 0, 0, 0.05)', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                        padding: '12px'
+                      }}
+                      labelFormatter={(label) => format(new Date(label), 'EEEE, MMMM d, yyyy')}
+                      itemStyle={{ fontSize: '11px', fontWeight: 'bold', padding: '2px 0' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="low_priority_count" 
+                      stackId="1"
+                      stroke="#10b981" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorLow)" 
+                      name="Low Priority"
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="medium_priority_count" 
+                      stackId="1"
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorMedium)" 
+                      name="Medium Priority"
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="high_priority_count" 
+                      stackId="1"
+                      stroke="#ef4444" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorHigh)" 
+                      name="High Priority"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              
+              {snapshots.length <= 1 && (
+                <div className="mt-4 p-3 bg-im-blue/5 rounded-xl border border-im-blue/10 flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-im-blue" />
+                  <span className="text-[10px] font-bold text-im-blue uppercase tracking-wider">
+                    Note: Showing arrival trend as historical snapshots are currently being collected.
+                  </span>
+                </div>
+              )}
+            </GlowWrapper>
+          )}
+        </div>
+
+        {/* AI Release Readiness Gauge (4/12) */}
+        <div className="lg:col-span-4">
+          <GlowWrapper glowColor={activeAiInsights?.readinessScore >= 80 ? "rgba(16, 185, 129, 0.4)" : activeAiInsights?.readinessScore >= 50 ? "rgba(245, 158, 11, 0.4)" : "rgba(239, 68, 68, 0.4)"} className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-soft h-full flex flex-col">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className={cn(
+                    "w-4 h-4",
+                    (activeAiInsights?.readinessScore || 0) >= 80 ? "text-emerald-500" : (activeAiInsights?.readinessScore || 0) >= 50 ? "text-amber-500" : "text-rose-500"
+                  )} />
+                  <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">AI Release Readiness</h3>
+                </div>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Version-Specific Impact</p>
+              </div>
+              <button 
+                onClick={handleRefineAnalysis}
+                disabled={localAiLoading || (selectedProject === 'All' && selectedRelease === 'All' && !!globalAiInsights)}
+                className={cn(
+                  "p-2 rounded-xl transition-all duration-300 border shadow-sm flex items-center gap-2 group",
+                  localAiLoading ? "bg-slate-50 text-slate-300 border-slate-100" : "bg-im-blue text-white border-im-blue hover:shadow-md active:scale-95"
+                )}
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", localAiLoading && "animate-spin")} />
+                <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">
+                  {localAiLoading ? 'Analyzing...' : 'Recalculate'}
+                </span>
+              </button>
+            </div>
+
+            {/* Version Selection Filters */}
+            <div className="grid grid-cols-2 gap-3 mb-8">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Project</label>
+                <select 
+                  value={selectedProject}
+                  onChange={(e) => {
+                    const newProject = e.target.value as any;
+                    setSelectedProject(newProject);
+                    setSelectedRelease('All'); // Reset version when project changes
+                    setLocalAiInsights(null); // Reset analysis
+                  }}
+                  className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-im-blue/20 transition-all appearance-none cursor-pointer hover:bg-slate-100"
+                >
+                  <option value="All">All Projects</option>
+                  <option value="Android">Android</option>
+                  <option value="iOS">iOS</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Release Cycle</label>
+                <select 
+                  value={selectedRelease}
+                  onChange={(e) => {
+                    setSelectedRelease(e.target.value);
+                    setLocalAiInsights(null); // Reset when filter changes
+                  }}
+                  className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-im-blue/20 transition-all appearance-none cursor-pointer hover:bg-slate-100"
+                >
+                  <option value="All">All Releases</option>
+                  {availableReleases.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <div className="relative w-44 h-44 flex items-center justify-center">
+                <svg className="absolute w-full h-full transform -rotate-90">
+                  <circle cx="88" cy="88" r="76" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-50" />
+                  <circle 
+                    cx="88" cy="88" r="76" 
+                    stroke="currentColor" strokeWidth="12" 
+                    fill="transparent" 
+                    strokeDasharray={477}
+                    strokeDashoffset={477 - (477 * (localAiLoading ? 0 : (activeAiInsights?.readinessScore ?? 0))) / 100}
+                    strokeLinecap="round"
+                    className={cn(
+                      "transition-all duration-1000",
+                      (activeAiInsights?.readinessScore || 0) >= 80 ? "text-emerald-500" : (activeAiInsights?.readinessScore || 0) >= 50 ? "text-amber-500" : "text-rose-500",
+                      localAiLoading && "opacity-20 animate-pulse"
+                    )}
+                  />
+                </svg>
+                <div className="flex flex-col items-center z-10">
+                  {localAiLoading ? (
+                    <div className="flex flex-col items-center">
+                      <RefreshCw className="w-8 h-8 text-im-blue animate-spin mb-2" />
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Analyzing</span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className={cn(
+                        "text-5xl font-black tracking-tighter leading-none",
+                        (activeAiInsights?.readinessScore || 0) >= 80 ? "text-emerald-600" : (activeAiInsights?.readinessScore || 0) >= 50 ? "text-amber-600" : "text-rose-600"
+                      )}>
+                        {activeAiInsights?.readinessScore !== undefined ? `${activeAiInsights.readinessScore}%` : '--'}
+                      </span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Ready</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-8 px-4 text-center w-full">
+                <p className="text-xs font-bold text-slate-700 leading-relaxed italic min-h-[32px] flex items-center justify-center">
+                  {localAiLoading ? (
+                    <span className="text-slate-400 animate-pulse">Consulting AI for impact analysis...</span>
+                  ) : (
+                    <span>
+                      "{activeAiInsights?.readinessScore >= 80 ? "Release risk is minimal. Proceed." : 
+                        activeAiInsights?.readinessScore >= 50 ? "Stabilization in progress. Monitor closely." : 
+                        activeAiInsights?.readinessScore < 50 ? "Significant High/Med risk detected." : 
+                        "Select version to begin analysis."}"
+                    </span>
+                  )}
+                </p>
+                <div className="mt-4 pt-4 border-t border-slate-50 flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-slate-400 uppercase">Selected Bugs:</span>
+                    <span className="font-black text-slate-600 uppercase tracking-tighter">{filteredBugs.length} Pending</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-slate-400 uppercase">H/M Priority:</span>
+                    <span className="font-black text-slate-600 uppercase tracking-tighter">
+                      {filteredBugs.filter(b => b.priority === 'High' || b.priority === 'Medium').length} Detected
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </GlowWrapper>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

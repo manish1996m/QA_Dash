@@ -1,6 +1,8 @@
 import { Platform } from '../types';
 import { PROJECTS, PRIORITIES, MODULE_CATEGORY_MAPPINGS } from '../services/openProject';
 
+export { PRIORITIES };
+
 export const getModuleLinks = (moduleName: string, platform: Platform) => {
   const projectSlug = platform === 'Android' ? 'android' : 'iosnative';
   const baseUrl = `https://project.intermesh.net/projects/${projectSlug}/work_packages`;
@@ -15,7 +17,7 @@ export const getModuleLinks = (moduleName: string, platform: Platform) => {
   let t: string;
   
   if (platform === 'Android') {
-    c = ["id", "subject", "priority", "author", "category", "customField6", "type", "status"];
+    c = ["id", "subject", "priority", "author", "category", "version", "customField6", "type", "status"];
     hi = false;
     g = "category";
     t = "category:desc,priority:asc,id:asc";
@@ -87,6 +89,44 @@ export const getGlobalLink = (platform: Platform, highOnly: boolean = false) => 
     tv: false,
     hl: "none",
     t: "category:desc,priority:asc,id:asc",
+    f: filters,
+    pp: 100,
+    pa: 1
+  };
+
+  return `${baseUrl}?query_props=${encodeURIComponent(JSON.stringify(queryProps))}`;
+};
+
+export const getPeriodicLink = (platform: Platform, days: string, priority?: string | string[], tatDays?: string) => {
+  const projectId = platform === 'Android' ? PROJECTS.ANDROID : PROJECTS.IOS;
+  const baseUrl = `https://project.intermesh.net/projects/${projectId}/work_packages`;
+  
+  const androidExcludedStatuses = ["41", "56", "45", "67", "68", "53"];
+  const iosExcludedStatuses = ["56", "67", "68", "53", "71", "41", "45"];
+  const excludedStatuses = platform === 'Android' ? androidExcludedStatuses : iosExcludedStatuses;
+
+  const filters: any[] = [
+    { n: "status", o: "!", v: excludedStatuses },
+    { n: "type", o: "=", v: ["7"] },
+    { n: "createdAt", o: ">t-", v: [days] } // Bugs created in the last X days
+  ];
+
+  if (tatDays) {
+    filters.push({ n: "createdAt", o: "<t-", v: [tatDays] });
+  }
+
+  if (priority) {
+    filters.push({ n: "priority", o: "=", v: Array.isArray(priority) ? priority : [priority] });
+  }
+
+  const queryProps = {
+    c: ["id", "subject", "priority", "author", "category", "version", "type", "status", "createdAt"],
+    hi: false,
+    g: "category",
+    is: true,
+    tv: false,
+    hl: "none",
+    t: "createdAt:desc,priority:asc,id:asc",
     f: filters,
     pp: 100,
     pa: 1
