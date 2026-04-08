@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils/cn';
 import { Sidebar } from './components/Sidebar';
@@ -9,7 +9,7 @@ import { ManagementView } from './views/ManagementView';
 import { LeadsView } from './views/LeadsView';
 import { AiInsightsView } from './views/AiInsightsView';
 import { fetchBugs, syncBugs, fetchSnapshots, DashboardData, BugSnapshot } from './services/openProject';
-import { getQAInsights } from './services/gemini';
+import { getQAInsights, isAiCircuitBroken } from './services/gemini';
 import { Bug } from './types';
 import { ChatBot } from './components/ChatBot';
 import { GlobalCursorGlow } from './components/GlobalCursorGlow';
@@ -29,6 +29,7 @@ function App() {
   const [aiLoading, setAiLoading] = useState(false);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [aiFailed, setAiFailed] = useState(false);
 
   const loadData = async (forceSync = false) => {
     setLoading(true);
@@ -41,7 +42,7 @@ function App() {
       
       const [data, snapshotData] = await Promise.all([
         fetchBugs(),
-        fetchSnapshots()
+        fetchSnapshots(30)
       ]);
 
       setDashboardData(data);
@@ -66,22 +67,29 @@ function App() {
   }, []);
 
   const generateAiInsights = async () => {
+    if (isAiCircuitBroken() || aiFailed) return;
     setAiLoading(true);
     try {
       const insights = await getQAInsights(bugs, snapshots);
-      setAiInsights(insights);
+      if (insights) {
+        setAiInsights(insights);
+        setAiFailed(false);
+      } else {
+        setAiFailed(true);
+      }
     } catch (error) {
       console.error('Error generating insights:', error);
+      setAiFailed(true);
     } finally {
       setAiLoading(false);
     }
   };
 
   useEffect(() => {
-    if (bugs.length > 0 && !aiLoading && !aiInsights) {
+    if (bugs.length > 0 && !aiLoading && !aiInsights && !aiFailed && !isAiCircuitBroken()) {
       generateAiInsights();
     }
-  }, [bugs, aiInsights, aiLoading]);
+  }, [bugs, aiInsights, aiLoading, aiFailed]);
 
   useEffect(() => {
     // Close mobile menu when view changes
@@ -139,10 +147,10 @@ function App() {
         />
 
         <div className="p-4 md:p-10 max-w-[1600px] mx-auto min-h-[calc(100vh-80px)]">
-          {!loading && !isSyncing && error && (
+          {!loading && !isSyncing && (error || isAiCircuitBroken()) && (
             <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span>{error}</span>
+              <span>{isAiCircuitBroken() ? "AI System Suspended due to repeated failures. Refresh page to try again." : error}</span>
             </div>
           )}
           

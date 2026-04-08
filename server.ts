@@ -59,7 +59,7 @@ function mapStatus(title: string, id: string): string {
 async function startServer() {
   console.log("Starting server process...");
   const app = express();
-  const PORT = 3000;
+  const PORT = 3001;
   console.log(`Configured to use port: ${PORT}`);
 
   app.use(express.json());
@@ -82,7 +82,8 @@ async function startServer() {
   // Get historical snapshots
   app.get("/api/db/snapshots", (req, res) => {
     try {
-      const snapshots = getSnapshots(30);
+      const limit = parseInt(req.query.limit as string) || 30;
+      const snapshots = getSnapshots(limit);
       res.json(snapshots);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch snapshots" });
