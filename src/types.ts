@@ -21,6 +21,7 @@ export interface Bug {
   authorId: string;
   createdAt: string;
   tatExceeded: boolean;
+  version?: string;
 }
 
 export interface Team {

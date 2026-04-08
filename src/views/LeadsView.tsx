@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Filter, ChevronRight, ExternalLink } from 'lucide-react';
 import { Bug, Platform } from '../types';
 import { TEAMS } from '../constants';
 import { cn } from '../utils/cn';
 import { GlowWrapper } from '../components/GlowWrapper';
+import { QAWorkloadReport } from '../components/QAWorkloadReport';
 
 interface LeadsViewProps {
   bugs: Bug[];
@@ -32,46 +33,49 @@ function extractIdFromUrl(url: string): string | null {
 export function LeadsView({ bugs }: LeadsViewProps) {
   const [platformFilter, setPlatformFilter] = useState<Platform | 'All'>('All');
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'squads' | 'workload'>('squads');
 
-  const teamData = TEAMS.map(team => {
-    // Lead fuzzy name normalization
-    const normalize = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
-    const leadNormalized = normalize(team.lead);
-    
-    // Member IDs normalization
-    const memberIds = team.members.map(m => extractIdFromUrl(MEMBER_URLS[m])).filter(Boolean) as string[];
+  const teamData = useMemo(() => {
+    return TEAMS.map(team => {
+      // Lead fuzzy name normalization
+      const normalize = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
+      const leadNormalized = normalize(team.lead);
+      
+      // Member IDs normalization
+      const memberIds = team.members.map(m => extractIdFromUrl(MEMBER_URLS[m])).filter(Boolean) as string[];
 
-    const teamBugs = bugs.filter(b => {
-      // Direct ID match for members
-      if (b.authorId && memberIds.includes(b.authorId)) return true;
-      // Fuzzy name match for Lead (fallback)
-      if (normalize(b.author || '').startsWith(leadNormalized)) return true;
-      return false;
-    });
-    
-    const teamPendingBugs = teamBugs.filter(b => b.status === 'Pending');
-    
-    const memberStats = team.members.map(name => {
-      const targetId = extractIdFromUrl(MEMBER_URLS[name]);
-      const mBugs = bugs.filter(b => b.authorId === targetId && b.status === 'Pending');
+      const teamBugs = bugs.filter(b => {
+        // Direct ID match for members
+        if (b.authorId && memberIds.includes(b.authorId)) return true;
+        // Fuzzy name match for Lead (fallback)
+        if (normalize(b.author || '').startsWith(leadNormalized)) return true;
+        return false;
+      });
+      
+      const teamPendingBugs = teamBugs.filter(b => b.status === 'Pending');
+      
+      const memberStats = team.members.map(name => {
+        const targetId = extractIdFromUrl(MEMBER_URLS[name]);
+        const mBugs = bugs.filter(b => b.authorId === targetId && b.status === 'Pending');
+        return {
+          name,
+          pending: mBugs.length,
+          android: mBugs.filter(b => b.platform === 'Android').length,
+          ios: mBugs.filter(b => b.platform === 'iOS').length,
+        };
+      });
+
       return {
-        name,
-        pending: mBugs.length,
-        android: mBugs.filter(b => b.platform === 'Android').length,
-        ios: mBugs.filter(b => b.platform === 'iOS').length,
+        name: team.lead,
+        members: team.members,
+        platform: team.platform,
+        pending: teamPendingBugs.length,
+        android: teamPendingBugs.filter(b => b.platform === 'Android').length,
+        ios: teamPendingBugs.filter(b => b.platform === 'iOS').length,
+        memberStats
       };
     });
-
-    return {
-      name: team.lead,
-      members: team.members,
-      platform: team.platform,
-      pending: teamPendingBugs.length,
-      android: teamPendingBugs.filter(b => b.platform === 'Android').length,
-      ios: teamPendingBugs.filter(b => b.platform === 'iOS').length,
-      memberStats
-    };
-  });
+  }, [bugs]);
 
   const filteredData = platformFilter === 'All' 
     ? teamData
@@ -79,162 +83,194 @@ export function LeadsView({ bugs }: LeadsViewProps) {
 
   return (
     <div className="flex flex-col gap-6 md:gap-8">
-      <GlowWrapper className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-3 rounded-xl border border-black/[0.08] shadow-soft gap-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-slate-400 ml-2">
-            <Filter className="w-3.5 h-3.5" />
-            <span className="text-[10px] uppercase font-bold tracking-wider">Filter</span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {['All', 'Android', 'iOS'].map((p) => (
-              <button 
-                key={p}
-                onClick={() => setPlatformFilter(p as any)}
-                className={cn(
-                  "px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all duration-200 border",
-                  platformFilter === p 
-                    ? "bg-im-blue text-white border-im-blue shadow-sm" 
-                    : "bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-white"
-                )}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider px-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-50">
-          {filteredData.length} Squads
-        </div>
-      </GlowWrapper>
+      {/* View Switcher Tabs */}
+      <div className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-2xl w-fit border border-slate-200/60 shadow-inner self-center sm:self-start mb-2">
+        <button 
+          onClick={() => setActiveTab('squads')}
+          className={cn(
+            "px-6 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300",
+            activeTab === 'squads' 
+              ? "bg-white text-slate-800 shadow-md border border-slate-100" 
+              : "text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Squads
+        </button>
+        <button 
+          onClick={() => setActiveTab('workload')}
+          className={cn(
+            "px-6 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 flex items-center gap-2",
+            activeTab === 'workload' 
+              ? "bg-im-blue text-white shadow-md border border-im-blue/20" 
+              : "text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Workload Insights
+          <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+        </button>
+      </div>
 
-      <div className="flex flex-col gap-4">
-        {filteredData.map((team) => (
-          <GlowWrapper key={team.name} className="bg-white rounded-xl border border-black/[0.08] shadow-soft hover:shadow-hover transition-all duration-200 overflow-hidden">
-            <div 
-              onClick={() => setExpandedTeam(expandedTeam === team.name ? null : team.name)}
-              className="flex flex-col sm:flex-row sm:items-center p-4 md:p-5 cursor-pointer hover:bg-slate-50/50 transition-colors group gap-4"
-            >
-              <div className="flex-1 flex items-center gap-3 md:gap-4">
-                <div className={cn(
-                  "w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 border shrink-0",
-                  expandedTeam === team.name 
-                    ? "rotate-90 bg-im-blue text-white border-im-blue shadow-sm" 
-                    : "bg-slate-50 border-slate-100 text-slate-400 group-hover:text-im-blue"
-                )}>
-                  <ChevronRight className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-base md:text-lg font-bold tracking-tight text-slate-800">{team.name}</span>
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Squad Lead</span>
-                </div>
+      {activeTab === 'squads' ? (
+        <>
+          <GlowWrapper className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-3 rounded-xl border border-black/[0.08] shadow-soft gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-slate-400 ml-2">
+                <Filter className="w-3.5 h-3.5" />
+                <span className="text-[10px] uppercase font-bold tracking-wider">Filter</span>
               </div>
-              
-              <div className="flex items-center justify-between sm:justify-end gap-4 md:gap-8 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-50">
-                <div className={cn(
-                  "px-3 py-1 text-[9px] font-bold uppercase tracking-wider border rounded-full",
-                  team.platform === 'Android' 
-                    ? "border-green-100 text-green-600 bg-green-50" 
-                    : "border-im-blue/10 text-im-blue bg-im-blue/5"
-                )}>
-                  {team.platform}
-                </div>
-
-                <div className="flex flex-col items-end min-w-[80px] md:min-w-[100px]">
-                  <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Pending</span>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-xl font-bold text-amber-600 leading-none">{team.pending}</span>
-                    {team.pending > 0 && (
-                      <div className="w-16 md:w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
-                        <div 
-                          style={{ width: `${(team.android / team.pending) * 100}%` }}
-                          className="bg-green-500 h-full transition-all duration-500"
-                        />
-                        <div 
-                          style={{ width: `${(team.ios / team.pending) * 100}%` }}
-                          className="bg-im-blue h-full transition-all duration-500"
-                        />
-                      </div>
+              <div className="flex flex-wrap gap-1">
+                {['All', 'Android', 'iOS'].map((p) => (
+                  <button 
+                    key={p}
+                    onClick={() => setPlatformFilter(p as any)}
+                    className={cn(
+                      "px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all duration-200 border",
+                      platformFilter === p 
+                        ? "bg-im-blue text-white border-im-blue shadow-sm" 
+                        : "bg-slate-50 border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-white"
                     )}
-                  </div>
-                </div>
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
             </div>
+            <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider px-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-50">
+              {filteredData.length} Squads
+            </div>
+          </GlowWrapper>
 
-            {expandedTeam === team.name && (
-              <div className="bg-slate-50/10 border-t border-slate-50">
-                <div className="p-4 md:p-6 bg-slate-50/20">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="h-px flex-1 bg-slate-200/40" />
-                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Squad Breakdown</div>
-                    <div className="h-px flex-1 bg-slate-200/40" />
-                  </div>
-
-                  <div className="hidden md:grid grid-cols-12 gap-4 mb-3 text-[10px] uppercase font-bold tracking-wider text-slate-400 px-6">
-                    <div className="col-span-7">Member</div>
-                    <div className="col-span-5 text-right flex items-center justify-end gap-3 px-4">
-                      <span>Total</span>
-                      <span>Platform Split (A/i)</span>
+          <div className="flex flex-col gap-4">
+            {filteredData.map((team) => (
+              <GlowWrapper key={team.name} className="bg-white rounded-xl border border-black/[0.08] shadow-soft hover:shadow-hover transition-all duration-200 overflow-hidden">
+                <div 
+                  onClick={() => setExpandedTeam(expandedTeam === team.name ? null : team.name)}
+                  className="flex flex-col sm:flex-row sm:items-center p-4 md:p-5 cursor-pointer hover:bg-slate-50/50 transition-colors group gap-4"
+                >
+                  <div className="flex-1 flex items-center gap-3 md:gap-4">
+                    <div className={cn(
+                      "w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-300 border shrink-0",
+                      expandedTeam === team.name 
+                        ? "rotate-90 bg-im-blue text-white border-im-blue shadow-sm" 
+                        : "bg-slate-50 border-slate-100 text-slate-400 group-hover:text-im-blue"
+                    )}>
+                      <ChevronRight className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-base md:text-lg font-bold tracking-tight text-slate-800">{team.name}</span>
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Squad Lead</span>
                     </div>
                   </div>
                   
-                  <div className="flex flex-col gap-2 px-1 md:px-2">
-                    {team.memberStats.length > 0 ? (
-                      team.memberStats.map((member) => (
-                        <div key={member.name} className="flex flex-col md:grid md:grid-cols-12 md:items-center p-3.5 bg-white rounded-xl border border-slate-100 hover:border-im-blue/20 hover:shadow-soft transition-all duration-300 group relative gap-3 md:gap-0">
-                          <div className="md:col-span-7 flex items-center gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-slate-200 group-hover:bg-im-blue transition-all duration-300 transform group-hover:scale-125" />
-                            {MEMBER_URLS[member.name] ? (
-                              <a 
-                                href={MEMBER_URLS[member.name]}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-bold text-sm tracking-tight text-slate-700 hover:text-im-blue transition-colors flex items-center gap-1.5"
-                                title={`Open project tasks for ${member.name}`}
-                              >
-                                {member.name}
-                                <ExternalLink className="w-3.5 h-3.5 opacity-60 md:opacity-0 md:group-hover:opacity-60 transition-opacity" />
-                              </a>
-                            ) : (
-                              <span className="font-bold text-sm tracking-tight text-slate-700">
-                                {member.name}
-                              </span>
-                            )}
+                  <div className="flex items-center justify-between sm:justify-end gap-4 md:gap-8 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-50">
+                    <div className={cn(
+                      "px-3 py-1 text-[9px] font-bold uppercase tracking-wider border rounded-full",
+                      team.platform === 'Android' 
+                        ? "border-green-100 text-green-600 bg-green-50" 
+                        : "border-im-blue/10 text-im-blue bg-im-blue/5"
+                    )}>
+                      {team.platform}
+                    </div>
+
+                    <div className="flex flex-col items-end min-w-[80px] md:min-w-[100px]">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Pending</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-xl font-bold text-amber-600 leading-none">{team.pending}</span>
+                        {team.pending > 0 && (
+                          <div className="w-16 md:w-20 h-1 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
+                            <div 
+                              style={{ width: `${(team.android / team.pending) * 100}%` }}
+                              className="bg-green-500 h-full transition-all duration-500"
+                            />
+                            <div 
+                              style={{ width: `${(team.ios / team.pending) * 100}%` }}
+                              className="bg-im-blue h-full transition-all duration-500"
+                            />
                           </div>
-                          
-                          <div className="md:col-span-5 flex items-center justify-between md:justify-end gap-5 md:px-4 border-t md:border-t-0 pt-2 md:pt-0 border-slate-50">
-                            <div className="flex flex-col md:items-end">
-                              <span className="text-[8px] uppercase font-bold text-slate-400 tracking-wider md:hidden">Pending Bugs</span>
-                              <span className="text-base font-black tabular-nums text-slate-800 tracking-tight">{member.pending}</span>
-                            </div>
-                            
-                            {/* Dual-Platform Integrated Pill */}
-                            <div className="flex bg-slate-50/80 p-0.5 rounded-lg border border-slate-100 shadow-sm overflow-hidden min-w-[70px]">
-                              <div className="flex-1 flex items-center justify-center gap-0.5 px-2 py-1 bg-white rounded-[6px] border border-green-100 shadow-sm">
-                                <span className="text-[10px] font-black text-green-600 leading-none">{member.android}</span>
-                                <span className="text-[8px] font-bold text-green-400 leading-none">A</span>
-                              </div>
-                              <div className="w-px h-4 bg-slate-200 self-center mx-1" />
-                              <div className="flex-1 flex items-center justify-center gap-0.5 px-2 py-1 bg-white rounded-[6px] border border-blue-100 shadow-sm">
-                                <span className="text-[10px] font-black text-im-blue leading-none">{member.ios}</span>
-                                <span className="text-[8px] font-bold text-blue-300 leading-none">i</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-10 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white/50">
-                        <div className="text-lg font-bold text-slate-300 mb-1">Hiring in process...</div>
-                        <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">No active members in this squad</div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </GlowWrapper>
-        ))}
-      </div>
+
+                {expandedTeam === team.name && (
+                  <div className="bg-slate-50/10 border-t border-slate-50">
+                    <div className="p-4 md:p-6 bg-slate-50/20">
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="h-px flex-1 bg-slate-200/40" />
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Squad Breakdown</div>
+                        <div className="h-px flex-1 bg-slate-200/40" />
+                      </div>
+
+                      <div className="hidden md:grid grid-cols-12 gap-4 mb-3 text-[10px] uppercase font-bold tracking-wider text-slate-400 px-6">
+                        <div className="col-span-7">Member</div>
+                        <div className="col-span-5 text-right flex items-center justify-end gap-3 px-4">
+                          <span>Total</span>
+                          <span>Platform Split (A/i)</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2 px-1 md:px-2">
+                        {team.memberStats.length > 0 ? (
+                          team.memberStats.map((member) => (
+                            <div key={member.name} className="flex flex-col md:grid md:grid-cols-12 md:items-center p-3.5 bg-white rounded-xl border border-slate-100 hover:border-im-blue/20 hover:shadow-soft transition-all duration-300 group relative gap-3 md:gap-0">
+                              <div className="md:col-span-7 flex items-center gap-3">
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-200 group-hover:bg-im-blue transition-all duration-300 transform group-hover:scale-125" />
+                                {MEMBER_URLS[member.name] ? (
+                                  <a 
+                                    href={MEMBER_URLS[member.name]}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-bold text-sm tracking-tight text-slate-700 hover:text-im-blue transition-colors flex items-center gap-1.5"
+                                    title={`Open project tasks for ${member.name}`}
+                                  >
+                                    {member.name}
+                                    <ExternalLink className="w-3.5 h-3.5 opacity-60 md:opacity-0 md:group-hover:opacity-60 transition-opacity" />
+                                  </a>
+                                ) : (
+                                  <span className="font-bold text-sm tracking-tight text-slate-700">
+                                    {member.name}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div className="md:col-span-5 flex items-center justify-between md:justify-end gap-5 md:px-4 border-t md:border-t-0 pt-2 md:pt-0 border-slate-50">
+                                <div className="flex flex-col md:items-end">
+                                  <span className="text-[8px] uppercase font-bold text-slate-400 tracking-wider md:hidden">Pending Bugs</span>
+                                  <span className="text-base font-black tabular-nums text-slate-800 tracking-tight">{member.pending}</span>
+                                </div>
+                                
+                                <div className="flex bg-slate-50/80 p-0.5 rounded-lg border border-slate-100 shadow-sm overflow-hidden min-w-[70px]">
+                                  <div className="flex-1 flex items-center justify-center gap-0.5 px-2 py-1 bg-white rounded-[6px] border border-green-100 shadow-sm">
+                                    <span className="text-[10px] font-black text-green-600 leading-none">{member.android}</span>
+                                    <span className="text-[8px] font-bold text-green-400 leading-none">A</span>
+                                  </div>
+                                  <div className="w-px h-4 bg-slate-200 self-center mx-1" />
+                                  <div className="flex-1 flex items-center justify-center gap-0.5 px-2 py-1 bg-white rounded-[6px] border border-blue-100 shadow-sm">
+                                    <span className="text-[10px] font-black text-im-blue leading-none">{member.ios}</span>
+                                    <span className="text-[8px] font-bold text-blue-300 leading-none">i</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-10 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white/50">
+                            <div className="text-lg font-bold text-slate-300 mb-1">Hiring in process...</div>
+                            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">No active members in this squad</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </GlowWrapper>
+            ))}
+          </div>
+        </>
+      ) : (
+        <QAWorkloadReport bugs={bugs} />
+      )}
     </div>
   );
 }

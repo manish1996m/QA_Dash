@@ -12,7 +12,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
 import fs from "fs";
-import { saveBugs, getAllBugs, clearBugs } from "./db/database";
+import { saveBugs, getAllBugs, clearBugs, queryChatbot, getSnapshots } from "./db/database";
 
 dotenv.config();
 
@@ -76,6 +76,16 @@ async function startServer() {
     } catch (error) {
       console.error("DB Fetch Error:", error);
       res.status(500).json({ error: "Failed to fetch bugs." });
+    }
+  });
+
+  // Get historical snapshots
+  app.get("/api/db/snapshots", (req, res) => {
+    try {
+      const snapshots = getSnapshots(30);
+      res.json(snapshots);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch snapshots" });
     }
   });
 
@@ -162,7 +172,8 @@ async function startServer() {
               author: item._links.author?.title || 'Unknown',
               authorId: item._links.author?.href?.split('/').pop() || '',
               createdAt: item.createdAt,
-              tatExceeded: tatExceeded
+              tatExceeded: tatExceeded,
+              version: item._links.version?.title || 'None'
             };
 
             if (allBugs.length === 0) {
@@ -211,6 +222,21 @@ async function startServer() {
     }
   });
 
+  // AI SQL Query: Execute SELECT queries from Chatbot
+  app.post("/api/ai/query", async (req, res) => {
+    const { sql, params } = req.body;
+    if (!sql) return res.status(400).json({ error: "No SQL provided" });
+
+    try {
+      console.log(`[AI-SQL] Executing: ${sql}`);
+      const results = queryChatbot(sql, params || []);
+      res.json(results);
+    } catch (error: any) {
+      console.error("[AI-SQL] Error:", error.message);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Serve static assets from 'dist'
   const distPath = path.join(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
@@ -228,3 +254,4 @@ startServer().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+

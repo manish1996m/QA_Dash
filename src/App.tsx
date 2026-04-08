@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils/cn';
 import { Sidebar } from './components/Sidebar';
@@ -8,7 +8,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ManagementView } from './views/ManagementView';
 import { LeadsView } from './views/LeadsView';
 import { AiInsightsView } from './views/AiInsightsView';
-import { fetchBugs, syncBugs, DashboardData } from './services/openProject';
+import { fetchBugs, syncBugs, fetchSnapshots, DashboardData, BugSnapshot } from './services/openProject';
 import { getQAInsights } from './services/gemini';
 import { Bug } from './types';
 import { ChatBot } from './components/ChatBot';
@@ -19,6 +19,7 @@ function App() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [snapshots, setSnapshots] = useState<BugSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -37,9 +38,15 @@ function App() {
         setIsSyncing(true);
         await syncBugs();
       }
-      const data = await fetchBugs();
+      
+      const [data, snapshotData] = await Promise.all([
+        fetchBugs(),
+        fetchSnapshots()
+      ]);
+
       setDashboardData(data);
       setBugs(data.bugs);
+      setSnapshots(snapshotData);
       setLastUpdated(new Date());
       
       if (data.bugs.length === 0 && !forceSync) {
@@ -61,7 +68,7 @@ function App() {
   const generateAiInsights = async () => {
     setAiLoading(true);
     try {
-      const insights = await getQAInsights(bugs);
+      const insights = await getQAInsights(bugs, snapshots);
       setAiInsights(insights);
     } catch (error) {
       console.error('Error generating insights:', error);
@@ -71,10 +78,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (view === 'ai' && !aiInsights && bugs.length > 0) {
+    if (bugs.length > 0 && !aiLoading && !aiInsights) {
       generateAiInsights();
     }
-  }, [view, bugs]);
+  }, [bugs, aiInsights, aiLoading]);
 
   useEffect(() => {
     // Close mobile menu when view changes
@@ -140,7 +147,7 @@ function App() {
           )}
           
           <div className="w-full h-full">
-            {view === 'management' && <ManagementView bugs={bugs} stats={stats} dashboardData={dashboardData} />}
+            {view === 'management' && <ManagementView bugs={bugs} stats={stats} dashboardData={dashboardData} snapshots={snapshots} aiInsights={aiInsights} />}
             {view === 'leads' && <LeadsView bugs={bugs} />}
             {view === 'ai' && (
               <AiInsightsView
@@ -165,3 +172,4 @@ function App() {
 }
 
 export default App;
+

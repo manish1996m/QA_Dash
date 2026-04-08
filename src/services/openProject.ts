@@ -6,6 +6,17 @@ export interface ModuleStats {
   bugs: Bug[];
 }
 
+export interface BugSnapshot {
+  id: number;
+  timestamp: string;
+  android_count: number;
+  ios_count: number;
+  high_priority_count: number;
+  medium_priority_count: number;
+  low_priority_count: number;
+  total_count: number;
+}
+
 export interface DashboardData {
   bugs: Bug[];
   global: {
@@ -63,6 +74,12 @@ export async function syncBugs(): Promise<{ message: string, count: number }> {
   return response.json();
 }
 
+export async function fetchSnapshots(): Promise<BugSnapshot[]> {
+  const response = await fetch('/api/db/snapshots');
+  if (!response.ok) throw new Error('Failed to fetch snapshots');
+  return response.json();
+}
+
 export async function fetchBugs(): Promise<DashboardData> {
   const response = await fetch('/api/db/bugs');
   if (!response.ok) throw new Error('Failed to fetch from local database');
@@ -110,3 +127,4 @@ export async function fetchBugs(): Promise<DashboardData> {
 
   return dashboardData;
 }
+
