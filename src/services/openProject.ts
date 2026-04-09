@@ -15,6 +15,7 @@ export interface BugSnapshot {
   medium_priority_count: number;
   low_priority_count: number;
   total_count: number;
+  isFallback?: boolean;
 }
 
 export interface DashboardData {
@@ -67,22 +68,29 @@ export async function syncBugs(): Promise<{ message: string, count: number }> {
   });
 
   if (!response.ok) {
-    const err = await response.json();
+    const err = await response.json().catch(() => ({}));
+    console.error("kuch toh fatt gaya 6", { status: response.status, url, error: err });
     throw new Error(err.error || 'Sync failed');
   }
 
   return response.json();
 }
 
-export async function fetchSnapshots(): Promise<BugSnapshot[]> {
-  const response = await fetch('/api/db/snapshots');
-  if (!response.ok) throw new Error('Failed to fetch snapshots');
+export async function fetchSnapshots(limit: number = 30): Promise<BugSnapshot[]> {
+  const response = await fetch(`/api/db/snapshots?limit=${limit}`);
+  if (!response.ok) {
+    console.error("kuch toh fatt gaya 7", { status: response.status, url: '/api/db/snapshots' });
+    throw new Error('Failed to fetch snapshots');
+  }
   return response.json();
 }
 
 export async function fetchBugs(): Promise<DashboardData> {
   const response = await fetch('/api/db/bugs');
-  if (!response.ok) throw new Error('Failed to fetch from local database');
+  if (!response.ok) {
+    console.error("kuch toh fatt gaya 8", { status: response.status, url: '/api/db/bugs' });
+    throw new Error('Failed to fetch from local database');
+  }
 
   const allBugs: Bug[] = await response.json();
 
