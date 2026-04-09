@@ -24,7 +24,8 @@ function initializeTable() {
       author TEXT,
       authorId TEXT,
       createdAt TEXT,
-      tatExceeded INTEGER
+      tatExceeded INTEGER,
+      version TEXT
     )
   `);
 
@@ -61,12 +62,12 @@ function initializeTable() {
     `);
   }
 
-  // Simple schema migration: check if 'author' exists
+  // Simple schema migration: check if 'version' exists
   const tableInfo = db.pragma('table_info(bugs)') as any[];
-  const hasAuthor = tableInfo.some(col => col.name === 'author');
+  const hasVersion = tableInfo.some(col => col.name === 'version');
   
-  if (!hasAuthor) {
-    console.log("[DB] Outdated schema detected. Recreating bugs table...");
+  if (!hasVersion) {
+    console.log("[DB] Outdated schema detected. Recreating bugs table to add 'version'...");
     db.exec(`DROP TABLE IF EXISTS bugs`);
     db.exec(`
       CREATE TABLE bugs (
@@ -82,7 +83,8 @@ function initializeTable() {
         author TEXT,
         authorId TEXT,
         createdAt TEXT,
-        tatExceeded INTEGER
+        tatExceeded INTEGER,
+        version TEXT
       )
     `);
   }
@@ -108,9 +110,9 @@ function migrateJsonToSqlite() {
 
 const insertBug = db.prepare(`
   INSERT OR REPLACE INTO bugs (
-    id, title, description, category, priority, status, platform, module, assignedTo, author, authorId, createdAt, tatExceeded
+    id, title, description, category, priority, status, platform, module, assignedTo, author, authorId, createdAt, tatExceeded, version
   ) VALUES (
-    @id, @title, @description, @category, @priority, @status, @platform, @module, @assignedTo, @author, @authorId, @createdAt, @tatExceeded
+    @id, @title, @description, @category, @priority, @status, @platform, @module, @assignedTo, @author, @authorId, @createdAt, @tatExceeded, @version
   )
 `);
 
@@ -185,3 +187,4 @@ export function queryChatbot(sql: string, params: any[] = []) {
 }
 
 migrateJsonToSqlite();
+

@@ -127,3 +127,4 @@ export async function fetchBugs(): Promise<DashboardData> {
 
   return dashboardData;
 }
+

@@ -172,7 +172,8 @@ async function startServer() {
               author: item._links.author?.title || 'Unknown',
               authorId: item._links.author?.href?.split('/').pop() || '',
               createdAt: item.createdAt,
-              tatExceeded: tatExceeded
+              tatExceeded: tatExceeded,
+              version: item._links.version?.title || 'None'
             };
 
             if (allBugs.length === 0) {
@@ -253,3 +254,4 @@ startServer().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
