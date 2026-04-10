@@ -51,8 +51,18 @@ function mapPriority(id: string): string {
 }
 
 function mapStatus(title: string, id: string): string {
-  const t = title.toLowerCase();
+  const t = title.toLowerCase().trim();
+  
   if (id === '53' || t.includes('testing') || t.includes('qa')) return 'In Testing';
+  
+  // Categorize specific resolved/closed states instead of blindly assigning 'Pending'
+  if (t === 'closed') return 'Closed';
+  if (t === 'bugs treatment') return 'Bugs Treatment';
+  if (t === 'rejected') return 'Rejected';
+  if (t === 'resolved on live') return 'Resolved on Live';
+  if (t === 'tested and rca accepted') return 'Tested and RCA Accepted';
+  
+  // Only true open/working states are marked as pending
   return 'Pending';
 }
 
@@ -95,7 +105,7 @@ async function startServer() {
     const { url: clientUrl, apiKey: clientApiKey } = req.body;
     const url = clientUrl || process.env.OPENPROJECT_URL?.trim() || "https://project.intermesh.net";
     const apiKey = clientApiKey || process.env.OPENPROJECT_API_KEY?.trim();
-    
+
     if (!apiKey) return res.status(401).json({ error: "API key missing" });
 
     const baseUrl = url.endsWith("/") ? url.slice(0, -1) : url;
@@ -111,16 +121,16 @@ async function startServer() {
         // Use EXACT same filters as OpenProject UI
         // Android excludes: 41,56,45,67,68,53
         // iOS excludes: 56,67,68,53,71,41,45 (extra: 71)
-        const excludedStatuses = platform === 'Android' 
+        const excludedStatuses = platform === 'Android'
           ? ["41", "56", "45", "67", "68", "53"]
           : ["56", "67", "68", "53", "71", "41", "45"];
-        
+
         const filtersStr = encodeURIComponent(JSON.stringify([
           { "project": { "operator": "=", "values": [project] } },
           { "status": { "operator": "!", "values": excludedStatuses } },
           { "type": { "operator": "=", "values": ["7"] } }
         ]));
-        
+
         let offset = 1;
         const pageSize = 100;
         let totalFetched = 0;
@@ -132,15 +142,15 @@ async function startServer() {
             headers: { "Authorization": authHeader, "Accept": "application/json" }
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          
+
           const data: any = await response.json();
           const items = data._embedded?.elements || [];
           totalAvailable = data.total || 0;
           totalFetched += items.length;
           console.log(`[SYNC] ${platform}: page ${offset}, got ${items.length} items (${totalFetched}/${totalAvailable})`);
-          
+
           if (items.length === 0) break;
-          
+
           const currentDate = new Date();
 
           for (const item of items) {
@@ -150,11 +160,11 @@ async function startServer() {
             const subject = item.subject || '';
             const priorityId = item._links.priority?.href?.split('/').pop() || '';
             const categoryId = item._links.category?.href?.split('/').pop() || '';
-            
+
             const priority = mapPriority(priorityId);
             const createdDate = new Date(item.createdAt);
             const daysDiff = (currentDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
-            
+
             let tatExceeded = false;
             if (priority === 'High') tatExceeded = daysDiff > 3;
             else if (priority === 'Medium') tatExceeded = daysDiff > 7;
