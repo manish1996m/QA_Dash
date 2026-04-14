@@ -52,16 +52,16 @@ function mapPriority(id: string): string {
 
 function mapStatus(title: string, id: string): string {
   const t = title.toLowerCase().trim();
-  
+
   if (id === '53' || t.includes('testing') || t.includes('qa')) return 'In Testing';
-  
+
   // Categorize specific resolved/closed states instead of blindly assigning 'Pending'
   if (t === 'closed') return 'Closed';
   if (t === 'bugs treatment') return 'Bugs Treatment';
   if (t === 'rejected') return 'Rejected';
   if (t === 'resolved on live') return 'Resolved on Live';
   if (t === 'tested and rca accepted') return 'Tested and RCA Accepted';
-  
+
   // Only true open/working states are marked as pending
   return 'Pending';
 }
@@ -233,18 +233,149 @@ async function startServer() {
     }
   });
 
-  // AI SQL Query: Execute SELECT queries from Chatbot
-  app.post("/api/ai/query", async (req, res) => {
-    const { sql, params } = req.body;
-    if (!sql) return res.status(400).json({ error: "No SQL provided" });
+  const LLM_BASE_URL = "https://imllm.intermesh.net/v1";
+
+  // AI Endpoint: Release Readiness JSON Insight
+  app.post("/api/ai/insights", async (req, res) => {
+    const { bugs, snapshots, releaseContext, baseScore = 75, model = 'gemini-1.5-flash' } = req.body;
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: "API key missing in Authorization header" });
+
+    if (!bugs || bugs.length === 0) return res.json(null);
+
+    const prompt = `
+      As a Senior QA Manager at IndiaMART, provide a CRITICAL Release Readiness analysis via JSON.
+      
+      ${releaseContext ? `FOCUS RELEASE: ${releaseContext}` : 'SCOPE: Global (All Projects & Releases)'}
+
+      CURRENT BUG DATA SUMMARY:
+      Total Pending: ${bugs.length}
+      - HIGH Priority: ${bugs.filter((b: any) => b.priority === 'High').length}
+      - MEDIUM Priority: ${bugs.filter((b: any) => b.priority === 'Medium').length}
+      - LOW/Normal Priority: ${bugs.filter((b: any) => b.priority === 'Low' || b.priority === 'Normal').length}
+      
+      MATHEMATICAL BASE SCORE: ${baseScore}%
+      (This is your starting point. High bugs MUST drop the score below 50%)
+
+      SCORING RUBRIC (STRICT):
+      - 100%: ZERO pending bugs.
+      - 90-99%: NO High/Medium bugs. Only a few Low/Normal bugs.
+      - 75-89%: NO High bugs. 1-5 Medium bugs.
+      - 50-74%: NO High bugs, but 5-15 Medium bugs.
+      - <50%: ONE OR MORE High priority bugs exist OR >15 Medium bugs.
+      - 0-10%: CRITICAL state (Blockers exist).
+
+      TASK:
+      1. EXPLAIN YOUR REASONING: Evaluate bug impact and explain deviations from baseScore.
+      2. Determine final Readiness Score (0-100).
+      3. Identify primary bottleneck.
+      4. Provide 3 proactive, actionable recommendations.
+
+      Format your response AS RAW JSON (strictly no markdown, no other text):
+      {
+        "reasoning": "string",
+        "readinessScore": number,
+        "bottleneck": "string",
+        "riskLevel": "High | Medium | Low",
+        "trend": "string",
+        "analysis": "markdown string",
+        "recommendations": ["string", "string", "string"]
+      }
+    `;
 
     try {
-      console.log(`[AI-SQL] Executing: ${sql}`);
-      const results = queryChatbot(sql, params || []);
-      res.json(results);
+      const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader },
+        body: JSON.stringify({ model: model, messages: [{ role: "user", content: prompt }], temperature: 0.2 })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return res.status(response.status).json({ error: errorData.error?.message || `API Error: ${response.status}` });
+      }
+
+      const data = await response.json();
+      let text = data.choices[0].message.content.trim();
+
+      if (text.startsWith('\`\`\`')) text = text.replace(/^\`\`\`json\n?/, '').replace(/\n?\`\`\`$/, '');
+
+      try {
+        res.json(JSON.parse(text));
+      } catch (parseError) {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        res.json(jsonMatch ? JSON.parse(jsonMatch[0]) : { error: "Failed to parse LLM JSON" });
+      }
     } catch (error: any) {
-      console.error("[AI-SQL] Error:", error.message);
-      res.status(400).json({ error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // AI Endpoint: Chatbot QA Assist
+  app.post("/api/ai/assist", async (req, res) => {
+    const { bugs, question, dashboardData, model = 'gemini-1.5-flash' } = req.body;
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: "API key missing in Authorization header" });
+
+    if (!bugs || bugs.length === 0) return res.json({ answer: "I don't have any bug data. Please click 'Sync Data' to fetch data from OpenProject!" });
+
+    const categoryMap: Record<string, { Android: number, iOS: number }> = {};
+    const assigneeMap: Record<string, { total: number, high: number, medium: number, low: number }> = {};
+
+    bugs.forEach((b: any) => {
+      const cat = b.category || 'General';
+      if (!categoryMap[cat]) categoryMap[cat] = { Android: 0, iOS: 0 };
+      categoryMap[cat][b.platform as 'Android' | 'iOS']++;
+
+      const assignee = b.assignedTo || 'Unassigned';
+      if (!assigneeMap[assignee]) assigneeMap[assignee] = { total: 0, high: 0, medium: 0, low: 0 };
+      assigneeMap[assignee].total++;
+      if (b.priority === 'High') assigneeMap[assignee].high++;
+      else if (b.priority === 'Medium') assigneeMap[assignee].medium++;
+      else assigneeMap[assignee].low++;
+    });
+
+    const prompt = `
+      You are "QA Assist", an expert QA manager for IndiaMART.
+      You have 100% access to the database-backed bug data via the summaries below.
+      
+      OFFICIAL DASHBOARD STATS:
+      - Android Total: ${dashboardData?.global?.androidPending || 0}
+      - iOS Total: ${dashboardData?.global?.iosPending || 0}
+      - Android High: ${dashboardData?.global?.androidHigh || 0}
+      - iOS High: ${dashboardData?.global?.iosHigh || 0}
+      
+      DETAILED ASSIGNEE ROSTER (Who holds what bugs):
+      ${Object.entries(assigneeMap).sort((a, b) => b[1].total - a[1].total).map(([n, c]) => `- ${n}: ${c.total} total bugs (High: ${c.high}, Medium: ${c.medium}, Low: ${c.low})`).join('\n')}
+
+      DETAILED CATEGORY BREAKDOWN:
+      ${Object.entries(categoryMap).map(([cat, counts]) => `- ${cat}: [Android: ${counts.Android}, iOS: ${counts.iOS}]`).join('\n')}
+      
+      RICH CONTEXT (Latest 150 bugs with descriptions):
+      ${bugs.slice(0, 150).map((b: any) => `- [${b.platform}] [Priority: ${b.priority}] [Assignee: ${b.assignedTo}] ${b.title}: ${b.description?.substring(0, 150)}...`).join('\n')}
+      
+      User Question: "${question}"
+      
+      GUIDELINES:
+      - Be accurate with counts. Use the Assignee Roster meticulously.
+    `;
+
+    try {
+      const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader },
+        body: JSON.stringify({ model: model, messages: [{ role: "user", content: prompt }] })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return res.status(response.status).json({ error: errorData.error?.message || "Unknown error" });
+      }
+
+      const data = await response.json();
+      res.json({ answer: data.choices[0].message.content });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
