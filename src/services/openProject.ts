@@ -70,7 +70,9 @@ export async function syncBugs(): Promise<{ message: string, count: number }> {
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     console.error("kuch toh fatt gaya 6", { status: response.status, url, error: err });
-    throw new Error(err.error || 'Sync failed');
+    const error: any = new Error(err.error || 'Sync failed');
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();
@@ -80,7 +82,9 @@ export async function fetchSnapshots(limit: number = 30): Promise<BugSnapshot[]>
   const response = await fetch(`/qa-dashboard/api/db/snapshots?limit=${limit}`);
   if (!response.ok) {
     console.error("kuch toh fatt gaya 7", { status: response.status, url: '/api/db/snapshots' });
-    throw new Error('Failed to fetch snapshots');
+    const error: any = new Error('Failed to fetch snapshots');
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -89,7 +93,9 @@ export async function fetchBugs(): Promise<DashboardData> {
   const response = await fetch('/qa-dashboard/api/db/bugs');
   if (!response.ok) {
     console.error("kuch toh fatt gaya 8", { status: response.status, url: '/api/db/bugs' });
-    throw new Error('Failed to fetch from local database');
+    const error: any = new Error('Failed to fetch from local database');
+    error.status = response.status;
+    throw error;
   }
 
   const allBugs: Bug[] = await response.json();

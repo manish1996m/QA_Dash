@@ -64,8 +64,21 @@ export function ChatBot({ bugs, data }: ChatBotProps) {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, botMessage]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chat Error:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: error.status === 401 ? "Unauthorized. Please refresh or log in again." : (error.message || "Something went wrong."),
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      
+      if (error.status === 401) {
+        setTimeout(() => {
+          window.location.href = '/qa-dashboard/login';
+        }, 2000);
+      }
     } finally {
       setIsLoading(false);
     }

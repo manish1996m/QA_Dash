@@ -201,8 +201,8 @@ async function startServer() {
   router.get("/auth/logout", (req, res) => { req.logout(() => res.redirect(`${BASE_PATH}/login`)); });
 
   const ensureAuthenticated = (req: any, res: any, next: any) => {
-    if (req.isAuthenticated()) return next();
-    if (req.originalUrl.includes("/api/")) return res.status(401).json({ error: "Unauthorized" });
+    if (req.isAuthenticated() || req.path === "/login" || req.path === "/login/") return next();
+    if (req.path.startsWith("/api/")) return res.status(401).json({ error: "Unauthorized" });
     res.redirect(`${BASE_PATH}/login`);
   };
 
@@ -224,15 +224,108 @@ async function startServer() {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
 
+  // AI ROUTES
+  router.post("/api/ai/insights", ensureAuthenticated, async (req, res) => {
+    const { model, bugs, snapshots, releaseContext, baseScore } = req.body;
+    const apiKey = req.headers.authorization?.split(" ")[1];
+    if (!apiKey) return res.status(401).json({ error: "Gemini API Key missing" });
+
+    try {
+      const prompt = `You are a QA Lead. Analyze these bugs and historical snapshots to provide release readiness insights.
+      Current Bugs: ${JSON.stringify(bugs.slice(0, 50))}
+      Snapshots: ${JSON.stringify(snapshots)}
+      Context: ${releaseContext || "Regular sync"}
+      Base Score Goal: ${baseScore}
+      
+      Provide a JSON response with:
+      {
+        "score": number (0-100),
+        "status": "Excellent" | "Good" | "Fair" | "At Risk" | "Critical",
+        "summary": "detailed summary here",
+        "recommendations": ["rec1", "rec2"],
+        "bottlenecks": ["bot1", "bot2"]
+      }`;
+
+      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+
+      if (!aiRes.ok) {
+        const err = await aiRes.json();
+        throw new Error(err.error?.message || "Gemini API Error");
+      }
+
+      const result = await aiRes.json();
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      res.json(JSON.parse(text));
+    } catch (e: any) {
+      console.error("[AI ERROR]", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  router.post("/api/ai/assist", ensureAuthenticated, async (req, res) => {
+    const { model, question, bugs } = req.body;
+    const apiKey = req.headers.authorization?.split(" ")[1];
+    if (!apiKey) return res.status(401).json({ error: "Gemini API Key missing" });
+
+    try {
+      const prompt = `You are QA Assist, a bug database expert.
+      Table 'bugs' schema: id, title, description, category, priority, status, platform, module, assignedTo, author, createdAt, version.
+      Current Context (Sample Bugs): ${JSON.stringify(bugs.slice(0, 10))}
+      
+      User Question: "${question}"
+      
+      If the question can be answered by a SQL query, provide ONLY the SQL query starting with 'SQL:'.
+      Example: 'SQL: SELECT count(*) FROM bugs WHERE priority="High"'
+      
+      If it's a general question, answer directly.`;
+
+      const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+
+      if (!aiRes.ok) {
+        const err = await aiRes.json();
+        throw new Error(err.error?.message || "Gemini API Error");
+      }
+
+      const aiData = await aiRes.json();
+      const aiText = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+      if (aiText.includes("SQL:")) {
+        const sql = aiText.split("SQL:")[1].trim().replace(/```sql|```/g, "").split(";")[0];
+        try {
+          const results = queryChatbot(sql);
+          res.json({ answer: `I've analyzed the data: ${JSON.stringify(results)}. ${aiText.split("SQL:")[0]}` });
+        } catch (dbErr: any) {
+          res.json({ answer: `I tried to query the database but encountered an error: ${dbErr.message}` });
+        }
+      } else {
+        res.json({ answer: aiText });
+      }
+    } catch (e: any) {
+      console.error("[CHAT ERROR]", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // FRONTEND HANDLER
   const distPath = path.join(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
     router.use(express.static(distPath));
-    router.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+    router.get("*", ensureAuthenticated, (req, res) => res.sendFile(path.join(distPath, "index.html")));
   } else {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "custom", base: `${BASE_PATH}/` });
     router.use(vite.middlewares);
-    router.get("*", async (req, res) => {
+    router.get("*", ensureAuthenticated, async (req, res) => {
       const url = req.originalUrl;
       const template = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf-8");
       const transformed = await vite.transformIndexHtml(url, template);

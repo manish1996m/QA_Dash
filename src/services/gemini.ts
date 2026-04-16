@@ -56,7 +56,9 @@ export async function getQAInsights(bugs: Bug[], snapshots: BugSnapshot[] = [], 
       consecutiveFailures++;
       const errorData = await response.json().catch(() => ({}));
       console.error("kuch toh fatt gaya 4", { status: response.status, errorData, consecutiveFailures });
-      throw new Error(errorData.error || `API Error: ${response.status}`);
+      const error: any = new Error(errorData.error || `API Error: ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
 
     const data = await response.json();
@@ -100,7 +102,9 @@ export async function askQAAssist(bugs: Bug[], question: string, dashboardData?:
       consecutiveFailures++;
       const errorData = await response.json().catch(() => ({}));
       console.error("kuch toh fatt gaya 3", { status: response.status, errorData, consecutiveFailures });
-      return `API Error: ${errorData.error || "Unknown error"}`;
+      const error: any = new Error(errorData.error || "Unknown error");
+      error.status = response.status;
+      throw error;
     }
 
     const data = await response.json();
@@ -109,6 +113,6 @@ export async function askQAAssist(bugs: Bug[], question: string, dashboardData?:
   } catch (error: any) {
     consecutiveFailures++;
     console.error("kuch toh fatt gaya 5", { error, consecutiveFailures });
-    return `Chat Error: ${error.message}`;
+    throw error;
   }
 }
