@@ -2,8 +2,9 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 
+const DATA_DIR = fs.existsSync('/app/data') ? '/app/data' : process.cwd();
 const DB_JSON = path.join(process.cwd(), 'database.json');
-const DB_SQLITE = path.join(process.cwd(), 'database.sqlite');
+const DB_SQLITE = path.join(DATA_DIR, 'database.sqlite');
 
 const db = new Database(DB_SQLITE);
 db.pragma('journal_mode = WAL');

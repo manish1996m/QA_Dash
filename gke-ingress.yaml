@@ -1,0 +1,39 @@
+# Sample GKE Ingress Configuration for QA Hub
+# This file should be used by the server admin team to set up path-based routing.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qa-hub-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    # Ensure SSL is handled (example via managed-certificate)
+    networking.gke.io/managed-certificates: "qatools-cert"
+    # Important: Ensure the load balancer preserves the original path
+    # GKE Ingress does this by default.
+spec:
+  rules:
+  - host: qatools.intermesh.net
+    http:
+      paths:
+      - path: /qa-dashboard
+        pathType: Prefix
+        backend:
+          service:
+            name: qa-dashboard-service
+            port:
+              number: 80 # This maps to container 3001 in your Service definition
+---
+# Correlating Service Definition
+apiVersion: v1
+kind: Service
+metadata:
+  name: qa-dashboard-service
+spec:
+  selector:
+    app: qa-dashboard
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3001 # Matches the EXPOSE in Dockerfile
+  type: NodePort

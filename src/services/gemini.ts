@@ -37,7 +37,7 @@ export async function getQAInsights(bugs: Bug[], snapshots: BugSnapshot[] = [], 
   const model = getModelName();
 
   try {
-    const response = await fetch("/api/ai/insights", {
+    const response = await fetch("/qa-dashboard/api/ai/insights", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -82,7 +82,7 @@ export async function askQAAssist(bugs: Bug[], question: string, dashboardData?:
   const model = getModelName();
 
   try {
-    const response = await fetch("/api/ai/assist", {
+    const response = await fetch("/qa-dashboard/api/ai/assist", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -55,7 +55,7 @@ export const MODULE_CATEGORY_MAPPINGS: Record<string, { iOS: string[], Android: 
 };
 
 export async function syncBugs(): Promise<{ message: string, count: number }> {
-  const url = '/api/db/sync';
+  const url = '/qa-dashboard/api/db/sync';
   const body = {
     url: localStorage.getItem('openproject_url'),
     apiKey: localStorage.getItem('openproject_api_key')
@@ -77,7 +77,7 @@ export async function syncBugs(): Promise<{ message: string, count: number }> {
 }
 
 export async function fetchSnapshots(limit: number = 30): Promise<BugSnapshot[]> {
-  const response = await fetch(`/api/db/snapshots?limit=${limit}`);
+  const response = await fetch(`/qa-dashboard/api/db/snapshots?limit=${limit}`);
   if (!response.ok) {
     console.error("kuch toh fatt gaya 7", { status: response.status, url: '/api/db/snapshots' });
     throw new Error('Failed to fetch snapshots');
@@ -86,7 +86,7 @@ export async function fetchSnapshots(limit: number = 30): Promise<BugSnapshot[]>
 }
 
 export async function fetchBugs(): Promise<DashboardData> {
-  const response = await fetch('/api/db/bugs');
+  const response = await fetch('/qa-dashboard/api/db/bugs');
   if (!response.ok) {
     console.error("kuch toh fatt gaya 8", { status: response.status, url: '/api/db/bugs' });
     throw new Error('Failed to fetch from local database');

@@ -13,9 +13,29 @@ import { getQAInsights, isAiCircuitBroken } from './services/gemini';
 import { Bug } from './types';
 import { ChatBot } from './components/ChatBot';
 import { GlobalCursorGlow } from './components/GlobalCursorGlow';
+import { LoginPage } from './pages/LoginPage';
+
+import { UseNavigate, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 
 function App() {
-  const [view, setView] = useState<'management' | 'leads' | 'ai'>('management');
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Map URL paths to views
+  const viewMap: Record<string, 'management' | 'leads' | 'ai'> = {
+    '/management': 'management',
+    '/leads': 'leads',
+    '/ai': 'ai'
+  };
+
+  // Extract current view from path or default to management
+  const currentPath = location.pathname === '/' ? '/management' : location.pathname;
+  const view = viewMap[currentPath] || 'management';
+  
+  const setView = (v: 'management' | 'leads' | 'ai') => {
+    navigate(`/${v}`);
+  };
+
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -55,6 +75,11 @@ function App() {
       }
     } catch (err: any) {
       console.error('Error loading data:', err);
+      if (err.status === 401) {
+        // Redirect to login if unauthorized
+        window.location.href = '/qa-dashboard/login';
+        return;
+      }
       setError(err.message || "Failed to connect. Please check your API key and URL in Settings.");
     } finally {
       setLoading(false);
@@ -103,7 +128,7 @@ function App() {
     iosHigh: dashboardData?.global.iosHigh || 0,
   };
 
-  return (
+  const MainLayout = () => (
     <div className="flex h-screen bg-im-bg text-slate-900 font-sans selection:bg-im-blue/10 overflow-hidden relative">
       <Sidebar 
         view={view} 
@@ -118,7 +143,6 @@ function App() {
         setIsMobileOpen={setIsMobileMenuOpen}
       />
 
-      {/* Mobile Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -176,6 +200,16 @@ function App() {
       <ChatBot bugs={bugs} data={dashboardData} />
       <GlobalCursorGlow />
     </div>
+  );
+
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/management" element={<MainLayout />} />
+      <Route path="/leads" element={<MainLayout />} />
+      <Route path="/ai" element={<MainLayout />} />
+      <Route path="/" element={<Navigate to="/management" replace />} />
+    </Routes>
   );
 }
 
