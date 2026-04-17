@@ -169,11 +169,16 @@ async function startServer() {
   passport.serializeUser((user: any, done) => done(null, user));
   passport.deserializeUser((user: any, done) => done(null, user));
 
-  // OAUTH
+  // OAUTH Verification
   const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
   const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
+  console.log("[INIT] Verifying Environment Variables...");
+  if (!process.env.OPENPROJECT_API_KEY) console.warn("[WARN] OPENPROJECT_API_KEY is not set. Sync will fail.");
+  if (!process.env.SESSION_SECRET) console.warn("[WARN] SESSION_SECRET is not set. Using default secret - not recommended for production.");
+  
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
+    console.log("[AUTH] Google OAuth configured.");
     passport.use(new GoogleStrategy({
       clientID: GOOGLE_CLIENT_ID,
       clientSecret: GOOGLE_CLIENT_SECRET,
@@ -194,6 +199,9 @@ async function startServer() {
 
   // Create Router
   const router = express.Router();
+
+  // HEALTH CHECK (Must be before ensureAuthenticated and authentication middleware)
+  router.get("/health", (req, res) => res.status(200).json({ status: "ok", time: new Date().toISOString() }));
 
   // AUTH ROUTES
   router.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"], successRedirect: `${BASE_PATH}/`, failureRedirect: `${BASE_PATH}/login` }));
